@@ -1,4 +1,4 @@
-import { test, expect } from "bun:test";
+import { test, expect } from "vitest";
 import { isEqual } from "../../../common/utils";
 import { Account, Institution, Item } from ".";
 

@@ -10,14 +10,14 @@
  * leak across sibling test files.
  */
 
-import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
+import { describe, test, expect, vi, beforeEach, afterAll } from "vitest";
 
 import { itemsTable } from "server/lib/postgres/models";
 import { deleteItemRoute } from "./delete-item";
 
 const originalQuery = itemsTable.query.bind(itemsTable);
 
-const mockQuery = mock(async (_filters: Record<string, unknown>): Promise<unknown[]> => []);
+const mockQuery = vi.fn(async (_filters: Record<string, unknown>): Promise<unknown[]> => []);
 
 (itemsTable as unknown as { query: typeof mockQuery }).query = mockQuery;
 

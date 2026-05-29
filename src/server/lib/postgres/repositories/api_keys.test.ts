@@ -1,11 +1,13 @@
-import { describe, test, expect, mock, beforeEach } from "bun:test";
+import { describe, test, expect, vi, beforeEach } from "vitest";
 
-const mockQuery = mock(
+const { mockQuery } = vi.hoisted(() => ({
+  mockQuery: vi.fn(
   (_sql: string, _values?: unknown[]): Promise<{ rows: unknown[]; rowCount: number | null }> =>
     Promise.resolve({ rows: [], rowCount: 0 }),
-);
+),
+}));
 
-mock.module("../client", () => ({
+vi.mock("../client", () => ({
   pool: { query: mockQuery },
 }));
 

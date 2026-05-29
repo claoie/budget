@@ -4,18 +4,20 @@
  * using pool.query mocks to avoid requiring a live database.
  */
 
-import { describe, test, expect, mock, beforeEach } from "bun:test";
+import { describe, test, expect, vi, beforeEach } from "vitest";
 
 // ---------------------------------------------------------------------------
 // Mock pool BEFORE importing repository (bun resolves mocks at import time)
 // ---------------------------------------------------------------------------
 
-const mockQuery = mock(
+const { mockQuery } = vi.hoisted(() => ({
+  mockQuery: vi.fn(
   (_sql: string, _values?: unknown[]): Promise<{ rows: unknown[]; rowCount: number | null }> =>
     Promise.resolve({ rows: [], rowCount: 0 }),
-);
+),
+}));
 
-mock.module("../client", () => ({
+vi.mock("../client", () => ({
   pool: { query: mockQuery },
   withTransaction: async (fn: (client: unknown) => Promise<unknown>) => {
     const fakeClient = { query: mockQuery };

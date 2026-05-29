@@ -7,14 +7,14 @@
  * WHERE clause as `user_id` — never a client-supplied value.
  */
 
-import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
+import { describe, test, expect, vi, beforeEach, afterAll } from "vitest";
 
 import { pool } from "server/lib/postgres/client";
 import { deleteTransferRoute } from "./delete-transfer";
 
 const originalQuery = pool.query.bind(pool);
 
-const mockQuery = mock(
+const mockQuery = vi.fn(
   (_sql: string, _values?: unknown[]): Promise<{ rows: unknown[]; rowCount: number | null }> =>
     Promise.resolve({ rows: [], rowCount: 0 }),
 );

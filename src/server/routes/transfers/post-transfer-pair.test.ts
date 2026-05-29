@@ -12,14 +12,14 @@
  * forwards the *session* user_id into the parameter list.
  */
 
-import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
+import { describe, test, expect, vi, beforeEach, afterAll } from "vitest";
 
 import { pool } from "server/lib/postgres/client";
 import { postTransferPairRoute } from "./post-transfer-pair";
 
 const originalQuery = pool.query.bind(pool);
 
-const mockQuery = mock(
+const mockQuery = vi.fn(
   (_sql: string, _values?: unknown[]): Promise<{ rows: unknown[]; rowCount: number | null }> =>
     Promise.resolve({ rows: [], rowCount: 0 }),
 );

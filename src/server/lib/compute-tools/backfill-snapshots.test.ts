@@ -3,28 +3,28 @@
  * monthly fill semantics, cash-equivalent skipping, polygon error handling,
  * and the maxMonthsPerInvocation cap.
  *
- * NOTE on mocking: we deliberately avoid `mock.module(…)` here. That mock
+ * NOTE on mocking: we deliberately avoid `vi.mock(…)` here. That mock
  * is process-wide in Bun and leaks into sibling test files (`snapshots`
  * repo, cron tests, etc.). `backfillMonthlySecuritySnapshotsForward`
  * accepts DI seams as positional options, so we pass plain mock fns and
  * the cross-file isolation problem disappears.
  */
 
-import { describe, test, expect, mock, beforeEach } from "bun:test";
+import { describe, test, expect, vi, beforeEach } from "vitest";
 
 import { backfillMonthlySecuritySnapshotsForward } from "./backfill-snapshots";
 
-const mockGetSecuritySnapshots = mock(async (_opts: { security_id?: string }) => [] as Array<{
+const mockGetSecuritySnapshots = vi.fn(async (_opts: { security_id?: string }) => [] as Array<{
   snapshot_id: string;
   snapshot_date: string;
   security_id: string;
   close_price?: number;
 }>);
-const mockUpsertSnapshots = mock(async (_snapshots: unknown[]) => [] as unknown[]);
-const mockSearchSecuritiesById = mock(
+const mockUpsertSnapshots = vi.fn(async (_snapshots: unknown[]) => [] as unknown[]);
+const mockSearchSecuritiesById = vi.fn(
   async (_ids: string[]) => [] as Array<{ security_id: string; ticker_symbol: string | null; type: string | null }>,
 );
-const mockGetClosePrice = mock(
+const mockGetClosePrice = vi.fn(
   async (_ticker: string, _date: Date) =>
     ({ success: true, data: 100 } as { success: true; data: number } | { success: false; error: string; message: string }),
 );

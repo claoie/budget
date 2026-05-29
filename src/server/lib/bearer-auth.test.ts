@@ -1,4 +1,4 @@
-import { describe, test, expect, mock } from "bun:test";
+import { describe, test, expect, vi } from "vitest";
 import { resolveBearerAuth } from "./bearer-auth";
 import type { ResolvedApiKey } from "./postgres/repositories/api_keys";
 import type { MaskedUser } from "./postgres/models/user";
@@ -17,8 +17,8 @@ const makeDeps = ({
   resolved: ResolvedApiKey | null;
   user: MaskedUser | undefined;
 }) => {
-  const verifyApiKey = mock(async (_plaintext: string) => resolved);
-  const getMaskedUserById = mock(async (_id: string) => user);
+  const verifyApiKey = vi.fn(async (_plaintext: string) => resolved);
+  const getMaskedUserById = vi.fn(async (_id: string) => user);
   return { verifyApiKey, getMaskedUserById };
 };
 

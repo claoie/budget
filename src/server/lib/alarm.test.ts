@@ -1,7 +1,7 @@
-import { describe, it, expect, beforeEach, mock, afterEach } from "bun:test";
+import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 
 // We need to mock fetch before importing alarm
-const mockFetch = mock(() => Promise.resolve({ ok: true } as Response));
+const mockFetch = vi.fn(() => Promise.resolve({ ok: true } as Response));
 global.fetch = mockFetch as typeof fetch;
 
 // Dynamically import so we can reset module state between tests

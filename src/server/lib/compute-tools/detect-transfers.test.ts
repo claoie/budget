@@ -1,4 +1,4 @@
-import { describe, it, expect, mock } from "bun:test";
+import { describe, it, expect, vi } from "vitest";
 import {
   runTransferDetection,
   scoreConfidence,
@@ -7,7 +7,7 @@ import {
 
 const noopLogger = {
   info: () => {},
-  error: mock(() => {}),
+  error: vi.fn(() => {}),
 };
 
 type CreateCall = {
@@ -40,10 +40,10 @@ describe("scoreConfidence", () => {
 
 describe("runTransferDetection", () => {
   it("does nothing when there are no users", async () => {
-    const queryFn = mock(async () => ({ rows: [] }));
-    const fetchUsers = mock(async () => []);
-    const fetchCandidates = mock(async () => [] as DetectionCandidate[]);
-    const createPair = mock(async () => {});
+    const queryFn = vi.fn(async () => ({ rows: [] }));
+    const fetchUsers = vi.fn(async () => []);
+    const fetchCandidates = vi.fn(async () => [] as DetectionCandidate[]);
+    const createPair = vi.fn(async () => {});
 
     await runTransferDetection(
       queryFn,
@@ -60,7 +60,7 @@ describe("runTransferDetection", () => {
 
   it("inserts a pair for a single candidate above threshold", async () => {
     const created: CreateCall[] = [];
-    const queryFn = mock(async () => ({ rows: [] }));
+    const queryFn = vi.fn(async () => ({ rows: [] }));
     const fetchUsers = async () => ["user-1"];
     const fetchCandidates = async (): Promise<DetectionCandidate[]> => [
       {
@@ -135,7 +135,7 @@ describe("runTransferDetection", () => {
     const created: CreateCall[] = [];
     const errorLogger = {
       info: () => {},
-      error: mock(() => {}),
+      error: vi.fn(() => {}),
     };
     const fetchUsers = async () => ["user-bad", "user-good"];
     const fetchCandidates = async (userId: string): Promise<DetectionCandidate[]> => {
@@ -170,7 +170,7 @@ describe("runTransferDetection", () => {
   it("logs but continues when an INSERT throws", async () => {
     const errorLogger = {
       info: () => {},
-      error: mock(() => {}),
+      error: vi.fn(() => {}),
     };
     const fetchUsers = async () => ["user-1"];
     const fetchCandidates = async (): Promise<DetectionCandidate[]> => [

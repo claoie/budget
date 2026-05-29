@@ -3,14 +3,14 @@
  *
  * Mocking pattern: monkey-patch `usersTable.queryOne` (the lowest-level
  * read that `searchUser` performs), mirroring `api-keys/post-api-keys.test.ts`.
- * Avoids `mock.module("server", ...)` because Bun's module mock is
+ * Avoids `vi.mock("server", ...)` because Bun's module mock is
  * process-wide and leaks across sibling test files.
  *
  * bcrypt.compare runs unmocked — fixture user passwords are real hashes
  * generated at test-module load.
  */
 
-import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
+import { describe, test, expect, vi, beforeEach, afterAll } from "vitest";
 import bcrypt from "bcrypt";
 
 import { usersTable } from "server/lib/postgres/models";
@@ -47,7 +47,7 @@ const makeFakeModel = (row: typeof realUserRow) => ({
 
 const originalQueryOne = usersTable.queryOne.bind(usersTable);
 
-const mockQueryOne = mock(async (_filters: Record<string, unknown>): Promise<unknown> => null);
+const mockQueryOne = vi.fn(async (_filters: Record<string, unknown>): Promise<unknown> => null);
 
 (usersTable as unknown as { queryOne: typeof mockQueryOne }).queryOne = mockQueryOne;
 

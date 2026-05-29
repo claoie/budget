@@ -5,7 +5,7 @@
  * exported `version` constant, no DB or downstream calls.
  */
 
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "vitest";
 
 import { version } from "server/lib/postgres/initialize";
 import { getLoginRoute } from "./get-login";

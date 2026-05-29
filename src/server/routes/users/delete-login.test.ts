@@ -6,7 +6,7 @@
  * class catches it and returns a 500 error envelope.
  */
 
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "vitest";
 
 import { deleteLoginRoute } from "./delete-login";
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   getClosePrice,
   getLatestClosePriceOnOrBefore,
@@ -46,7 +46,7 @@ describe("polygon", () => {
 
     it("returns price data on successful response", async () => {
       process.env.POLYGON_API_KEY = "test-key";
-      globalThis.fetch = mock(() =>
+      globalThis.fetch = vi.fn(() =>
         Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ results: [{ c: 185.5 }] }),
@@ -63,7 +63,7 @@ describe("polygon", () => {
 
     it("returns no_data error when results array is empty", async () => {
       process.env.POLYGON_API_KEY = "test-key";
-      globalThis.fetch = mock(() =>
+      globalThis.fetch = vi.fn(() =>
         Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ results: [] }),
@@ -80,7 +80,7 @@ describe("polygon", () => {
 
     it("returns api_error on network failure", async () => {
       process.env.POLYGON_API_KEY = "test-key";
-      globalThis.fetch = mock(() => Promise.reject(new Error("Network error")));
+      globalThis.fetch = vi.fn(() => Promise.reject(new Error("Network error")));
 
       const result = await getClosePrice("AAPL", new Date("2024-01-15"));
 
@@ -94,7 +94,7 @@ describe("polygon", () => {
     it("uses cached value on second call", async () => {
       process.env.POLYGON_API_KEY = "test-key";
       let callCount = 0;
-      globalThis.fetch = mock(() => {
+      globalThis.fetch = vi.fn(() => {
         callCount++;
         return Promise.resolve({
           ok: true,
@@ -124,7 +124,7 @@ describe("polygon", () => {
 
     it("returns ticker details on successful response", async () => {
       process.env.POLYGON_API_KEY = "test-key";
-      globalThis.fetch = mock(() =>
+      globalThis.fetch = vi.fn(() =>
         Promise.resolve({
           ok: true,
           json: () =>
@@ -146,7 +146,7 @@ describe("polygon", () => {
 
     it("returns no_data error when results is missing", async () => {
       process.env.POLYGON_API_KEY = "test-key";
-      globalThis.fetch = mock(() =>
+      globalThis.fetch = vi.fn(() =>
         Promise.resolve({
           ok: true,
           json: () => Promise.resolve({}),
@@ -174,7 +174,7 @@ describe("polygon", () => {
       process.env.POLYGON_API_KEY = "test-key";
       const tFri = Date.UTC(2024, 0, 12);
       const tThu = Date.UTC(2024, 0, 11);
-      globalThis.fetch = mock(() =>
+      globalThis.fetch = vi.fn(() =>
         Promise.resolve({
           ok: true,
           json: () =>
@@ -197,7 +197,7 @@ describe("polygon", () => {
 
     it("returns no_data when response has no results", async () => {
       process.env.POLYGON_API_KEY = "test-key";
-      globalThis.fetch = mock(() =>
+      globalThis.fetch = vi.fn(() =>
         Promise.resolve({
           ok: true,
           json: () => Promise.resolve({ results: [] }),
@@ -211,7 +211,7 @@ describe("polygon", () => {
     it("requests a date range ending at the given date with configurable lookback", async () => {
       process.env.POLYGON_API_KEY = "test-key";
       const seen: string[] = [];
-      globalThis.fetch = mock((url: string) => {
+      globalThis.fetch = vi.fn((url: string) => {
         seen.push(url);
         return Promise.resolve({
           ok: true,
@@ -229,7 +229,7 @@ describe("polygon", () => {
 
     it("returns plan_limit when Polygon responds with NOT_AUTHORIZED", async () => {
       process.env.POLYGON_API_KEY = "test-key";
-      globalThis.fetch = mock(() =>
+      globalThis.fetch = vi.fn(() =>
         Promise.resolve({
           ok: true,
           json: () =>
@@ -250,7 +250,7 @@ describe("polygon", () => {
 
     it("preserves the trading date across timezones (UTC components, not local getDate())", async () => {
       process.env.POLYGON_API_KEY = "test-key";
-      globalThis.fetch = mock(() =>
+      globalThis.fetch = vi.fn(() =>
         Promise.resolve({
           ok: true,
           json: () =>
@@ -290,7 +290,7 @@ describe("polygon", () => {
       }) as any;
 
       let fetchCalls = 0;
-      globalThis.fetch = mock(() => {
+      globalThis.fetch = vi.fn(() => {
         fetchCalls++;
         return Promise.resolve({
           ok: true,
@@ -321,7 +321,7 @@ describe("polygon", () => {
       polygonQueue.reset();
 
       let fetchCalls = 0;
-      globalThis.fetch = mock(() => {
+      globalThis.fetch = vi.fn(() => {
         fetchCalls++;
         return Promise.resolve({
           ok: true,

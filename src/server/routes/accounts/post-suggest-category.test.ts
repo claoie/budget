@@ -1,14 +1,14 @@
 /**
  * Tests for the POST /api/suggest-category route.
  *
- * NOTE on mocking: we deliberately avoid `mock.module("server", ...)` here.
+ * NOTE on mocking: we deliberately avoid `vi.mock("server", ...)` here.
  * That mock is process-wide in Bun and leaks into sibling test files (e.g.
  * the transactions repo tests) which import their own barrel pieces. Instead
  * we monkey-patch the small surface we actually exercise on the real
  * imports, and restore originals in afterAll.
  */
 
-import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
+import { describe, test, expect, vi, beforeEach, afterAll } from "vitest";
 
 import { pool, transactionsTable } from "server";
 import { postSuggestCategoryRoute } from "./post-suggest-category";
@@ -16,11 +16,11 @@ import { postSuggestCategoryRoute } from "./post-suggest-category";
 const originalPoolQuery = pool.query.bind(pool);
 const originalTxUpdate = transactionsTable.update.bind(transactionsTable);
 
-const mockPoolQuery = mock(
+const mockPoolQuery = vi.fn(
   (_sql: string, _values?: unknown[]): Promise<{ rows: unknown[]; rowCount: number | null }> =>
     Promise.resolve({ rows: [], rowCount: 0 }),
 );
-const mockTxUpdate = mock(
+const mockTxUpdate = vi.fn(
   async (
     _id: unknown,
     _data: unknown,

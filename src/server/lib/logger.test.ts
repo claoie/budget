@@ -1,14 +1,14 @@
-import { describe, it, expect, beforeEach, afterEach, spyOn } from "bun:test";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { logger } from "./logger";
 
-let consoleErrorSpy: ReturnType<typeof spyOn>;
+let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 const originalLogLevel = process.env.LOG_LEVEL;
 const originalNodeEnv = process.env.NODE_ENV;
 
 beforeEach(() => {
   process.env.LOG_LEVEL = "error";
   process.env.NODE_ENV = "development";
-  consoleErrorSpy = spyOn(console, "error").mockImplementation(() => {});
+  consoleErrorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
 afterEach(() => {

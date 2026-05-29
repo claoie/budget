@@ -1,4 +1,4 @@
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "vitest";
 import { AccountType, AccountSubtype } from "plaid";
 import { getAccountBalance } from "./accounts";
 import { Account } from "client";

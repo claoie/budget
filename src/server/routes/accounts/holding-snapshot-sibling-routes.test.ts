@@ -11,11 +11,11 @@
  * Mocking strategy mirrors `post-suggest-category.test.ts`: monkey-patch
  * shared-object methods (`pool.query`, `snapshotsTable.softDelete`,
  * `securitiesTable.queryOne`) on the real imports and restore in `afterAll`.
- * `mock.module("server", ...)` is process-wide in Bun and leaks into sibling
+ * `vi.mock("server", ...)` is process-wide in Bun and leaks into sibling
  * test files, so it is deliberately not used.
  */
 
-import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
+import { describe, test, expect, vi, beforeEach, afterAll } from "vitest";
 
 import { pool } from "server";
 import { snapshotsTable, securitiesTable } from "server/lib/postgres/repositories";
@@ -26,12 +26,12 @@ const originalPoolQuery = pool.query.bind(pool);
 const originalSoftDelete = snapshotsTable.softDelete.bind(snapshotsTable);
 const originalSecuritiesQueryOne = securitiesTable.queryOne.bind(securitiesTable);
 
-const mockPoolQuery = mock(
+const mockPoolQuery = vi.fn(
   (_sql: string, _values?: unknown[]): Promise<{ rows: unknown[]; rowCount: number | null }> =>
     Promise.resolve({ rows: [], rowCount: 0 }),
 );
-const mockSoftDelete = mock(async (_id: unknown, _userId?: unknown): Promise<boolean> => true);
-const mockSecuritiesQueryOne = mock(
+const mockSoftDelete = vi.fn(async (_id: unknown, _userId?: unknown): Promise<boolean> => true);
+const mockSecuritiesQueryOne = vi.fn(
   async (_filters: unknown): Promise<{ toJSON: () => Record<string, unknown> } | null> => null,
 );
 

@@ -1,4 +1,4 @@
-import { describe, it, expect } from "bun:test";
+import { describe, it, expect } from "vitest";
 import { inferLabelConfidence } from "./infer-label-confidence";
 
 // Generic helper that maps user intent (expressed as { category_id?, confidence? }

@@ -1,7 +1,7 @@
 /**
  * Tests for inferCashHoldings + ensureUSDCashSecurity.
  *
- * NOTE on mocking: we deliberately avoid `mock.module("server", ...)` here.
+ * NOTE on mocking: we deliberately avoid `vi.mock("server", ...)` here.
  * That mock is process-wide in Bun and leaks into sibling test files (the
  * snapshot repo tests, cron tests, etc.) that import their own barrel
  * pieces. Both functions take dependency-injection seams as positional
@@ -9,7 +9,7 @@
  * disappears.
  */
 
-import { describe, test, expect, mock, beforeEach } from "bun:test";
+import { describe, test, expect, vi, beforeEach } from "vitest";
 import { AccountType } from "plaid";
 
 import { inferCashHoldings, ensureUSDCashSecurity } from "./cash-holding";
@@ -79,7 +79,7 @@ const makeCashSecurity = () =>
 // Default DI stub: ensureCashSecurity returns the canonical USD cash row.
 // Each test overrides via mockImplementationOnce when it needs different
 // behaviour or asserts call count.
-const mockEnsureCash = mock(async () => makeCashSecurity());
+const mockEnsureCash = vi.fn(async () => makeCashSecurity());
 
 beforeEach(() => {
   mockEnsureCash.mockReset();
@@ -309,8 +309,8 @@ describe("inferCashHoldings", () => {
 describe("ensureUSDCashSecurity", () => {
   test("returns the existing USD cash security when one is already in the table", async () => {
     const existing = makeCashSecurity();
-    const mockSearch = mock(async (_opts: unknown) => [existing]);
-    const mockUpsert = mock(async (_secs: unknown[]) => []);
+    const mockSearch = vi.fn(async (_opts: unknown) => [existing]);
+    const mockUpsert = vi.fn(async (_secs: unknown[]) => []);
 
     const result = await ensureUSDCashSecurity(
       mockSearch as unknown as Parameters<typeof ensureUSDCashSecurity>[0],
@@ -322,8 +322,8 @@ describe("ensureUSDCashSecurity", () => {
   });
 
   test("creates the USD cash security on first call when none exists", async () => {
-    const mockSearch = mock(async (_opts: unknown) => [] as unknown[]);
-    const mockUpsert = mock(async (_secs: unknown[]) => []);
+    const mockSearch = vi.fn(async (_opts: unknown) => [] as unknown[]);
+    const mockUpsert = vi.fn(async (_secs: unknown[]) => []);
 
     const result = await ensureUSDCashSecurity(
       mockSearch as unknown as Parameters<typeof ensureUSDCashSecurity>[0],

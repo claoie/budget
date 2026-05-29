@@ -1,4 +1,4 @@
-import { describe, it, expect, mock } from "bun:test";
+import { describe, it, expect, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { runAutoSuggestions, CAS_NULL_CONFIDENCE } from "./auto-suggest";
@@ -15,7 +15,7 @@ import { pool } from "../postgres/client";
 
 const noopLogger = {
   info: () => {},
-  error: mock(() => {}),
+  error: vi.fn(() => {}),
 };
 
 type ApplyCall = {
@@ -28,10 +28,10 @@ type ApplyCall = {
 
 describe("runAutoSuggestions", () => {
   it("skips when no users found", async () => {
-    const queryFn = mock(async () => ({ rows: [] }));
-    const fetchUsers = mock(async () => []);
-    const fetchUnlabeled = mock(async () => []);
-    const applyLabel = mock(async () => {});
+    const queryFn = vi.fn(async () => ({ rows: [] }));
+    const fetchUsers = vi.fn(async () => []);
+    const fetchUnlabeled = vi.fn(async () => []);
+    const applyLabel = vi.fn(async () => {});
     await runAutoSuggestions(
       queryFn,
       noopLogger,
@@ -49,7 +49,7 @@ describe("runAutoSuggestions", () => {
 
   it("skips transaction when total_labeled < 3", async () => {
     const applyCalls: ApplyCall[] = [];
-    const queryFn = mock(async () => {
+    const queryFn = vi.fn(async () => {
       // Only 2 labeled — below threshold of 3
       return { rows: [{ label_category_id: "cat-1", label_budget_id: "bud-1", accepted: "2", rejected: "0" }] };
     });
@@ -79,7 +79,7 @@ describe("runAutoSuggestions", () => {
 
   it("skips when reject_rate > 0.1", async () => {
     const applyCalls: ApplyCall[] = [];
-    const queryFn = mock(async () => {
+    const queryFn = vi.fn(async () => {
       // 8 accepted, 2 rejected → reject_rate = 0.2 > 0.1 → skip
       return { rows: [{ label_category_id: "cat-2", label_budget_id: "bud-2", accepted: "8", rejected: "2" }] };
     });
@@ -109,7 +109,7 @@ describe("runAutoSuggestions", () => {
 
   it("skips when confidence < 0.95", async () => {
     const applyCalls: ApplyCall[] = [];
-    const queryFn = mock(async () => {
+    const queryFn = vi.fn(async () => {
       // 3 accepted, 1 rejected → confidence = 3/4 = 0.75 < 0.95 → skip
       return { rows: [{ label_category_id: "cat-3", label_budget_id: "bud-3", accepted: "3", rejected: "1" }] };
     });
@@ -139,7 +139,7 @@ describe("runAutoSuggestions", () => {
 
   it("applies suggestion and caps confidence at 0.99", async () => {
     const applyCalls: ApplyCall[] = [];
-    const queryFn = mock(async () => {
+    const queryFn = vi.fn(async () => {
       // 10 accepted, 0 rejected → confidence = 1.0 → should cap at 0.99
       return { rows: [{ label_category_id: "cat-groceries", label_budget_id: "bud-household", accepted: "10", rejected: "0" }] };
     });
@@ -173,7 +173,7 @@ describe("runAutoSuggestions", () => {
 
   it("computes exact confidence when ratio is between 0.95 and 0.99", async () => {
     const applyCalls: ApplyCall[] = [];
-    const queryFn = mock(async () => {
+    const queryFn = vi.fn(async () => {
       // 19 accepted, 1 rejected → confidence = 19/20 = 0.95, reject_rate = 0.05
       return { rows: [{ label_category_id: "cat-health", label_budget_id: "bud-medical", accepted: "19", rejected: "1" }] };
     });
@@ -204,7 +204,7 @@ describe("runAutoSuggestions", () => {
 
   it("caches merchant signal — queries DB only once per unique merchant", async () => {
     let signalQueryCount = 0;
-    const queryFn = mock(async () => {
+    const queryFn = vi.fn(async () => {
       signalQueryCount++;
       return { rows: [{ label_category_id: "cat-books", label_budget_id: "bud-leisure", accepted: "5", rejected: "0" }] };
     });
@@ -231,7 +231,7 @@ describe("runAutoSuggestions", () => {
     let signalSql = "";
     let signalParams: unknown[] = [];
 
-    const queryFn = mock(async (sql: string, params?: unknown[]) => {
+    const queryFn = vi.fn(async (sql: string, params?: unknown[]) => {
       signalSql = sql;
       signalParams = params ?? [];
       return { rows: [{ label_category_id: "cat-coffee", label_budget_id: "bud-discretionary", accepted: "5", rejected: "0" }] };
@@ -263,10 +263,10 @@ describe("runAutoSuggestions", () => {
 
     const errorLogger = {
       info: () => {},
-      error: mock(() => {}),
+      error: vi.fn(() => {}),
     };
 
-    const queryFn = mock(async () => ({ rows: [] }));
+    const queryFn = vi.fn(async () => ({ rows: [] }));
     const fetchUsers = async () => ["fail-user", "ok-user"];
     const fetchUnlabeled = async () => {
       if (!firstUserSeen) {
@@ -311,7 +311,7 @@ describe("runAutoSuggestions", () => {
 
   it("applies suggestions to split transactions via the second pass", async () => {
     const splitApplyCalls: SplitApplyCall[] = [];
-    const queryFn = mock(async () => ({
+    const queryFn = vi.fn(async () => ({
       rows: [{ label_category_id: "cat-groceries", label_budget_id: "bud-household", accepted: "10", rejected: "0" }],
     }));
     const fetchUsers = async () => ["user-split-1"];
@@ -351,7 +351,7 @@ describe("runAutoSuggestions", () => {
     // A parent transaction and a split share the same merchant_name. The
     // signal query should fire exactly once even though it's "needed" twice.
     let signalQueryCount = 0;
-    const queryFn = mock(async () => {
+    const queryFn = vi.fn(async () => {
       signalQueryCount++;
       return { rows: [{ label_category_id: "cat-x", label_budget_id: "bud-x", accepted: "5", rejected: "0" }] };
     });
@@ -377,7 +377,7 @@ describe("runAutoSuggestions", () => {
 
   it("respects the gates on splits the same way as on transactions", async () => {
     // 8 accepted / 2 rejected → reject_rate = 0.2 > 0.1 → skip both passes.
-    const queryFn = mock(async () => ({
+    const queryFn = vi.fn(async () => ({
       rows: [{ label_category_id: "cat-y", label_budget_id: "bud-y", accepted: "8", rejected: "2" }],
     }));
     const fetchUsers = async () => ["user-gates"];
@@ -498,7 +498,7 @@ describe("runAutoSuggestions", () => {
         return { rows: [], rowCount: 0 };
       };
       try {
-        const signalQueryFn = mock(async () => ({
+        const signalQueryFn = vi.fn(async () => ({
           rows: [
             {
               label_category_id: "cat-cas",
@@ -541,7 +541,7 @@ describe("runAutoSuggestions", () => {
         return { rows: [], rowCount: 0 };
       };
       try {
-        const signalQueryFn = mock(async () => ({
+        const signalQueryFn = vi.fn(async () => ({
           rows: [
             {
               label_category_id: "cat-cas",

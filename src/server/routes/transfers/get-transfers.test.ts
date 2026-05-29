@@ -3,18 +3,18 @@
  *
  * Mocks `pool.query` because `getTransferPairs` calls that directly.
  * Pattern follows api-keys/get-api-keys.test.ts — monkey-patch + restore,
- * avoiding `mock.module("server", ...)` since Bun's module mock is
+ * avoiding `vi.mock("server", ...)` since Bun's module mock is
  * process-wide and leaks into sibling test files.
  */
 
-import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
+import { describe, test, expect, vi, beforeEach, afterAll } from "vitest";
 
 import { pool } from "server/lib/postgres/client";
 import { getTransfersRoute } from "./get-transfers";
 
 const originalQuery = pool.query.bind(pool);
 
-const mockQuery = mock(
+const mockQuery = vi.fn(
   (_sql: string, _values?: unknown[]): Promise<{ rows: unknown[]; rowCount: number | null }> =>
     Promise.resolve({ rows: [], rowCount: 0 }),
 );

@@ -4,18 +4,18 @@
  * Mocking pattern: monkey-patch `apiKeysTable.insert` (the lowest-level
  * write the route's `createApiKey` helper performs), following the same
  * approach as `accounts/post-suggest-category.test.ts`. Avoids
- * `mock.module("server", ...)` because Bun's module mock is process-wide
+ * `vi.mock("server", ...)` because Bun's module mock is process-wide
  * and leaks into sibling test files in the same run.
  */
 
-import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
+import { describe, test, expect, vi, beforeEach, afterAll } from "vitest";
 
 import { apiKeysTable } from "server/lib/postgres/models";
 import { postApiKeysRoute } from "./post-api-keys";
 
 const originalInsert = apiKeysTable.insert.bind(apiKeysTable);
 
-const mockInsert = mock(
+const mockInsert = vi.fn(
   async (
     _row: unknown,
     _returning?: string[],

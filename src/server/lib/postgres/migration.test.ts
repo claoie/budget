@@ -3,7 +3,7 @@
  * Tests the pure functions that handle PostgreSQL type normalization and SQL generation.
  */
 
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "vitest";
 import {
   parseColumnDefinition,
   normalizeDbType,

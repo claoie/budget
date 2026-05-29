@@ -1,5 +1,5 @@
 // Run with: bun test --preload ./test-preload.ts holdings.test.ts
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "vitest";
 import { InvestmentTransactionType, InvestmentTransactionSubtype } from "plaid";
 
 import {

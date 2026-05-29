@@ -1,4 +1,4 @@
-import { test, expect, afterEach } from "bun:test";
+import { test, expect, afterEach } from "vitest";
 import { Capacity } from "./Capacity";
 
 const UUID_V4_RE =

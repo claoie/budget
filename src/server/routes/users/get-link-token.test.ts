@@ -8,7 +8,7 @@
  * dependencies — tracked as a separate follow-up issue.
  */
 
-import { describe, test, expect } from "bun:test";
+import { describe, test, expect } from "vitest";
 
 import { getLinkTokenRoute } from "./get-link-token";
 
