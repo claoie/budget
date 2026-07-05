@@ -155,17 +155,12 @@ export class TypePredicates {
     (isSuggestedLabel(e) || isSuggestedTransferHalf(e, this.context));
   transfers: Predicate = (e) => !isInvestment(e) && isTransferHalf(e, this.context);
   /**
-   * User-created row (cash or investment) — `source === "manual"`. Filed
-   * via #567/#585's mint routes; distinguishes hand-entered rows from
-   * synced Plaid history. Splits don't carry their own `source` and are
-   * treated as inheriting from their parent transaction — but the
-   * SplitTransaction row itself has no `source` field, so a split of a
-   * manual parent does NOT surface under this filter today. That matches
-   * how the current UI works: manual mint doesn't create splits, and
-   * splitting a manual parent isn't wired.
+   * User-created row (cash or investment) — `source === "manual"`.
+   * SplitTransaction has no `source` field of its own; excluding splits
+   * here means a split of a manual parent does NOT surface under the
+   * Manual filter — the parent tx does.
    */
-  manual: Predicate = (e) =>
-    !(e instanceof SplitTransaction) && (e as { source?: string }).source === "manual";
+  manual: Predicate = (e) => !(e instanceof SplitTransaction) && e.source === "manual";
 
   /** Combine the named types with OR. Empty list = match everything. */
   any =
