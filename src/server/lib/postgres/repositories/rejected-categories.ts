@@ -2,7 +2,6 @@ import { JSONRejectedCategory } from "common";
 import {
   MaskedUser,
   RejectedCategoryModel,
-  rejectedCategoriesTable,
   TRANSACTION_ID,
   USER_ID,
   CATEGORY_ID,
