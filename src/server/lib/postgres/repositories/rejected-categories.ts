@@ -76,8 +76,8 @@ export const removeRejectedCategory = async (
  * stored row keeps its OLD `transaction_id` (the pending id) and a NEW
  * row is created with the POSTED id. Any rejection rows the user
  * recorded while the transaction was pending stay attached to the OLD
- * id and become orphaned signal from the engine's point of view (it
- * scans by transaction_id matching the current merchant join).
+ * id and become orphaned — no reader keys off the pending id after the
+ * transition, so the rejection is silently forgotten.
  *
  * This migrates them in-place: copy rows from `pending` → `posted` with
  * `ON CONFLICT DO NOTHING` (in case the posted id already has its own
@@ -121,22 +121,3 @@ export const migrateRejectedCategoriesOnPendingPosted = async (
   }
 };
 
-/**
- * Bulk read rejection rows across a set of transactions — used by
- * `getMerchantSignal` (Stage 2b) to count rejections per (merchant,
- * category).
- */
-export const getRejectedCategoriesForTransactions = async (
-  user: MaskedUser,
-  transaction_ids: string[],
-): Promise<JSONRejectedCategory[]> => {
-  if (transaction_ids.length === 0) return [];
-  const models = await rejectedCategoriesTable.query(
-    { [USER_ID]: user.user_id },
-    {
-      inFilters: { [TRANSACTION_ID]: transaction_ids },
-      orderBy: `${TRANSACTION_ID}, ${REJECTED_AT} DESC`,
-    },
-  );
-  return models.map((m) => m.toJSON());
-};

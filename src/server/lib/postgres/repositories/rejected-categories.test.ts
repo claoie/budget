@@ -22,7 +22,6 @@ const {
   addRejectedCategory,
   removeRejectedCategory,
   migrateRejectedCategoriesOnPendingPosted,
-  getRejectedCategoriesForTransactions,
 } = await import("./rejected-categories");
 
 const fakeUser = () =>
@@ -176,47 +175,3 @@ describe("migrateRejectedCategoriesOnPendingPosted [SQL-shape]", () => {
   });
 });
 
-describe("getRejectedCategoriesForTransactions [SQL-shape]", () => {
-  test("short-circuits when transaction_ids is empty (no DB call)", async () => {
-    const result = await getRejectedCategoriesForTransactions(fakeUser(), []);
-    expect(result).toEqual([]);
-    expect(mockQuery).not.toHaveBeenCalled();
-  });
-
-  test("user_id in WHERE, transaction_ids passed via IN, ORDER BY ensures stable read order", async () => {
-    mockQuery.mockImplementationOnce(async () => ({
-      rows: [fakeRow({ transaction_id: "tx-1" }), fakeRow({ transaction_id: "tx-2" })],
-      rowCount: 2,
-    }));
-    const result = await getRejectedCategoriesForTransactions(fakeUser(), [
-      "tx-1",
-      "tx-2",
-      "tx-3",
-    ]);
-    const [sql, values] = mockQuery.mock.calls[0];
-    expect(sql).toContain("FROM rejected_categories");
-    expect(sql).toContain("user_id");
-    expect(sql).toContain("transaction_id");
-    expect(sql).toContain("IN");
-    expect(sql).toMatch(/ORDER BY\s+transaction_id,\s+rejected_at\s+DESC/);
-    expect(values).toContain("u-1");
-    expect(values).toContain("tx-1");
-    expect(values).toContain("tx-2");
-    expect(values).toContain("tx-3");
-    expect(result).toHaveLength(2);
-  });
-
-  test("model maps row → toJSON shape with rejected_at preserved", async () => {
-    mockQuery.mockImplementationOnce(async () => ({
-      rows: [fakeRow({ rejected_at: "2026-06-09T13:00:00Z" })],
-      rowCount: 1,
-    }));
-    const result = await getRejectedCategoriesForTransactions(fakeUser(), ["tx-1"]);
-    expect(result).toHaveLength(1);
-    expect(result[0]).toEqual({
-      transaction_id: "tx-1",
-      category_id: "cat-A",
-      rejected_at: "2026-06-09T13:00:00Z",
-    });
-  });
-});
