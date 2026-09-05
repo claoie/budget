@@ -4,14 +4,13 @@ import { ItemProvider } from "common";
 
 // `mock.module` is process-global in Bun: a relative-path mock here would also
 // replace these sibling modules for every other test file in the run (e.g.
-// detect-transfers.test.ts / auto-suggest.test.ts test the *real* exports).
-// Capture the real modules up front so we can (a) spread their other exports
-// into the mock factories and (b) restore them in afterAll.
+// detect-transfers.test.ts tests the *real* exports). Capture the real
+// modules up front so we can (a) spread their other exports into the mock
+// factories and (b) restore them in afterAll.
 const realServer = { ...(await import("server")) };
 const realAlarm = { ...(await import("server/lib/alarm")) };
 const realSyncPlaid = { ...(await import("./sync-plaid")) };
 const realSyncSimpleFin = { ...(await import("./sync-simple-fin")) };
-const realAutoSuggest = { ...(await import("./auto-suggest")) };
 const realDetectTransfers = { ...(await import("./detect-transfers")) };
 const realRefreshSecuritySnapshots = {
   ...(await import("./refresh-security-snapshots")),
@@ -36,7 +35,6 @@ const mockSyncSimpleFinData = mock(
   async () =>
     ({ accounts: [], transactions: [], investmentTransactions: [] }) as unknown,
 );
-const mockRunAutoSuggestions = mock(async () => {});
 const mockRunTransferDetection = mock(async () => {});
 const mockRefreshActiveSecuritySnapshots = mock(async () => ({
   refreshed: 0,
@@ -67,11 +65,6 @@ mock.module("./sync-plaid", () => ({
 mock.module("./sync-simple-fin", () => ({
   ...realSyncSimpleFin,
   syncSimpleFinData: mockSyncSimpleFinData,
-}));
-
-mock.module("./auto-suggest", () => ({
-  ...realAutoSuggest,
-  runAutoSuggestions: mockRunAutoSuggestions,
 }));
 
 mock.module("./detect-transfers", () => ({
@@ -107,8 +100,6 @@ beforeEach(() => {
   mockSyncSimpleFinData.mockImplementation(
     async () => ({ accounts: [], transactions: [], investmentTransactions: [] }),
   );
-  mockRunAutoSuggestions.mockReset();
-  mockRunAutoSuggestions.mockImplementation(async () => {});
   mockRunTransferDetection.mockReset();
   mockRunTransferDetection.mockImplementation(async () => {});
   mockRefreshActiveSecuritySnapshots.mockReset();
@@ -132,7 +123,6 @@ afterAll(() => {
   mock.module("server/lib/alarm", () => realAlarm);
   mock.module("./sync-plaid", () => realSyncPlaid);
   mock.module("./sync-simple-fin", () => realSyncSimpleFin);
-  mock.module("./auto-suggest", () => realAutoSuggest);
   mock.module("./detect-transfers", () => realDetectTransfers);
   mock.module(
     "./refresh-security-snapshots",
@@ -238,26 +228,14 @@ describe("scheduledSync / runSync", () => {
     });
   });
 
-  it("runs auto-suggestions, transfer detection, and security-snapshot refresh after provider sync", async () => {
+  it("runs transfer detection and security-snapshot refresh after provider sync", async () => {
     mockGetAllItems.mockResolvedValueOnce([]);
-
-    scheduledSync();
-    await flushMicrotasks();
-
-    expect(mockRunAutoSuggestions).toHaveBeenCalledTimes(1);
-    expect(mockRunTransferDetection).toHaveBeenCalledTimes(1);
-    expect(mockRefreshActiveSecuritySnapshots).toHaveBeenCalledTimes(1);
-  });
-
-  it("swallows auto-suggestion errors without blocking transfer detection", async () => {
-    mockGetAllItems.mockResolvedValueOnce([]);
-    mockRunAutoSuggestions.mockRejectedValueOnce(new Error("suggest fail"));
 
     scheduledSync();
     await flushMicrotasks();
 
     expect(mockRunTransferDetection).toHaveBeenCalledTimes(1);
-    expect(mockLogger.error).toHaveBeenCalled();
+    expect(mockRefreshActiveSecuritySnapshots).toHaveBeenCalledTimes(1);
   });
 
   it("sends alarm when getAllItems throws", async () => {

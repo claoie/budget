@@ -3,7 +3,6 @@ import { getAllItems, logger, updateItemSyncStatus } from "server";
 import { sendAlarm } from "server/lib/alarm";
 import { syncPlaidAccounts, syncPlaidTransactions } from "./sync-plaid";
 import { syncSimpleFinData } from "./sync-simple-fin";
-import { runAutoSuggestions } from "./auto-suggest";
 import { runTransferDetection } from "./detect-transfers";
 import { refreshActiveSecuritySnapshots } from "./refresh-security-snapshots";
 
@@ -88,9 +87,6 @@ const runSync = async () => {
         });
       }
     }
-    await runAutoSuggestions().catch((error) => {
-      logger.error("Auto-suggestion job failed", {}, error);
-    });
     await runTransferDetection().catch((error) => {
       logger.error("Transfer-detection job failed", {}, error);
     });

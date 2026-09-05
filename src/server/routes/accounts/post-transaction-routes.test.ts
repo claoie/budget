@@ -519,7 +519,7 @@ describe("post-investment-transaction route", () => {
     expect(mockQuery).not.toHaveBeenCalled();
   });
 
-  test("body passes through WITHOUT confidence inference (auto-suggest skips investments)", async () => {
+  test("body passes through WITHOUT confidence inference on the investment route", async () => {
     const result = await postInvestmentTransactionRoute.execute(
       makeReq(
         postInvestmentTransactionRoute,

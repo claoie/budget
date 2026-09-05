@@ -20,7 +20,8 @@ export interface FilterContext {
  * Engine-emitted suggestion the user hasn't acted on yet. Accepts every
  * row type the TransactionsPage renders (`filteredAndSorted` mixes the
  * three) — InvestmentTransaction carries the same `label.category_id` /
- * `label.category_confidence` columns and can be auto-suggested too.
+ * `label.category_confidence` columns and can hold fractional-confidence
+ * suggestions too.
  */
 export const isSuggestedLabel = (
   e: Transaction | SplitTransaction | InvestmentTransaction,

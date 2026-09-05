@@ -13,8 +13,7 @@ interface MaybeLabeled {
  *  - `category_id: <string>` + confidence undefined → confidence = 1
  *    (user explicitly chose a category — treat as confirmed)
  *  - `category_id: null`    + confidence undefined → confidence = 0
- *    (user cleared the category — treat as a rejection signal so the
- *    auto-suggest engine doesn't immediately re-suggest the same thing)
+ *    (user cleared the category — treat as a rejection signal)
  *  - caller sets confidence explicitly → preserve (e.g. Accept-All sends 1
  *    when the row already has a category_id; the API caller path on the
  *    `/suggest-category` route sends fractional values; tests may set 0

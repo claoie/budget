@@ -19,19 +19,13 @@ const isNullableString = (v: unknown): v is string | null =>
 
 /**
  * Stores every (transaction, category) pair the user has explicitly
- * rejected. Read by the auto-suggest engine's merchant signal — see
- * `getMerchantSignal` — to downweight categories the user keeps saying
- * no to.
+ * rejected.
  *
  * Composite PRIMARY KEY on `(transaction_id, category_id)` — at most one
  * row per pair. Other tables only carry the current state; this table
  * exists *because* the legacy denorm columns can't carry rejection
  * history (`transactions.label_category_id` is a single current label,
  * not a sequence).
- *
- * Confirmations and engine ephemeral scores intentionally live elsewhere
- * (`transactions.label_category_id` + `label_category_confidence`) — see
- * `JSONRejectedCategory`'s docstring for the rationale.
  */
 const rejectedCategorySchema = {
   // transactions.transaction_id is VARCHAR(255). The FK keeps rejection

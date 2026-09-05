@@ -39,8 +39,6 @@ const splitTxSchema = {
   [LABEL_BUDGET_ID]: "UUID",
   [LABEL_CATEGORY_ID]: "UUID",
   [LABEL_MEMO]: "TEXT",
-  // Mirrors the same column on `transactions`. Required for the two-pass
-  // auto-suggest engine to write per-split suggestions.
   [LABEL_CATEGORY_CONFIDENCE]: "FLOAT",
   [UPDATED]: "TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP",
   [IS_DELETED]: "BOOLEAN DEFAULT FALSE",

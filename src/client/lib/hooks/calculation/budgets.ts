@@ -64,11 +64,12 @@ export const getBudgetData = (
     const nextMonthDate = new ViewDate("month", transactionDate).next().getEndDate();
 
     // "Unsorted" means any transaction the user hasn't confirmed —
-    // `confidence !== 1` — bundling unlabeled, rejected, and auto-suggested-
-    // but-unreviewed. A row only counts toward the sorted/category bucket if
-    // it's confirmed AND has a category_id; the second half guards against a
-    // malformed `confidence=1 AND category_id=null` row silently dropping out
-    // of both buckets when `categories.get(null)` returns undefined.
+    // `confidence !== 1` — bundling unlabeled, rejected, and engine-suggested-
+    // but-unreviewed rows. A row only counts toward the sorted/category
+    // bucket if it's confirmed AND has a category_id; the second half guards
+    // against a malformed `confidence=1 AND category_id=null` row silently
+    // dropping out of both buckets when `categories.get(null)` returns
+    // undefined.
     const isConfirmed = label.isConfirmed();
 
     // Calculates unsorted transactions amount for budgets

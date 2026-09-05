@@ -27,10 +27,8 @@ describe("inferLabelConfidence", () => {
   });
 
   it("category_id null + confidence undefined → confidence = 0 (rejection signal)", () => {
-    // This is the gap the previous repo-layer helper missed: a budget-change
-    // path that clears category should be treated as a rejection so the
-    // auto-suggest engine doesn't re-suggest the same thing on the next
-    // hourly run (engine filter is `confidence IS NULL`).
+    // A budget-change path that clears category records confidence = 0 so
+    // the row reads as an explicit rejection rather than "never labeled".
     const out = inferLabelConfidence({
       transaction_id: "txn-1",
       label: { budget_id: "bud-1", category_id: null },

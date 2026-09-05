@@ -164,7 +164,7 @@ describe("getBudgetData — confidence-gate bucketing", () => {
     expect(budgetData.get(w.category.id, readDate).sorted_amount).toBe(0);
   });
 
-  test("auto-suggested but unreviewed (0 < confidence < 1) → unsorted bucket", () => {
+  test("engine-suggested but unreviewed (0 < confidence < 1) → unsorted bucket", () => {
     const w = makeWorld();
     const { transactions } = makeTx(w, 25, {
       budget_id: w.budget.id,

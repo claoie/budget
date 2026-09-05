@@ -167,8 +167,8 @@ export abstract class Table<
    * Update one row by primary key.
    *
    * `extraWhere` ANDs additional equality/null guards onto the WHERE — used
-   * for compare-and-swap writes (e.g. auto-suggest's "only overwrite rows
-   * whose label_category_confidence is still NULL"). Values follow
+   * for compare-and-swap writes ("only overwrite a row whose
+   * `label_category_confidence` is still NULL"). Values follow
    * `prepareQuery` semantics: `null` → IS NULL, `IS_NOT_NULL` → IS NOT NULL,
    * anything else → `column = $N`.
    *
