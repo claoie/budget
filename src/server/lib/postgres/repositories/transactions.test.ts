@@ -23,6 +23,7 @@ const {
   getTransactions,
   getTransaction,
   searchTransactionsById,
+  searchTransactionsByAccountId,
   upsertTransactions,
   updateTransactions,
 } = await import("./transactions");
@@ -170,6 +171,49 @@ describe("searchTransactionsById", () => {
     expect(values).toContain("tx-x");
     expect(values).toContain("tx-y");
     expect(values).toContain("tx-z");
+  });
+});
+
+describe("searchTransactionsByAccountId", () => {
+  test("defaults to active-only (excludeDeleted when includeDeleted unset)", async () => {
+    // Two queries: one for transactions, one for investment_transactions.
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+    await searchTransactionsByAccountId(testUser, ["acc-1"]);
+    const txSql = mockQuery.mock.calls[0][0] as string;
+    const invSql = mockQuery.mock.calls[1][0] as string;
+    expect(txSql).toContain("is_deleted IS NULL OR is_deleted = FALSE");
+    expect(invSql).toContain("is_deleted IS NULL OR is_deleted = FALSE");
+  });
+
+  test("includeDeleted=true drops the soft-delete predicate on both arms", async () => {
+    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+    await searchTransactionsByAccountId(testUser, ["acc-1"], undefined, {
+      includeDeleted: true,
+    });
+    const txSql = mockQuery.mock.calls[0][0] as string;
+    const invSql = mockQuery.mock.calls[1][0] as string;
+    expect(txSql).not.toContain("is_deleted IS NULL OR is_deleted = FALSE");
+    expect(invSql).not.toContain("is_deleted IS NULL OR is_deleted = FALSE");
+  });
+
+  test("returns is_deleted=true rows when includeDeleted=true", async () => {
+    mockQuery.mockResolvedValueOnce({
+      rows: [makeTxRow({ transaction_id: "tx-deleted", is_deleted: true })],
+      rowCount: 1,
+    });
+    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    const result = await searchTransactionsByAccountId(testUser, ["acc-1"], undefined, {
+      includeDeleted: true,
+    });
+    expect(result.transactions).toHaveLength(1);
+    expect(result.transactions[0].transaction_id).toBe("tx-deleted");
+    expect(result.transactions[0].is_deleted).toBe(true);
+  });
+
+  test("short-circuits on empty account_ids without touching the DB", async () => {
+    const result = await searchTransactionsByAccountId(testUser, []);
+    expect(result).toEqual({ transactions: [], investment_transactions: [] });
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 });
 

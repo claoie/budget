@@ -122,6 +122,17 @@ describe("findStoredTransaction", () => {
     // previous month's label via the removed compound-key fallback.
     // With the fallback gone, a genuinely-new transaction with no
     // pending back-pointer and no id collision must return undefined.
+    //
+    // The `thisMonth` fixture INTENTIONALLY carries the same discriminator
+    // triple as `lastMonth` (account_id / name / amount). Under the
+    // narrowed `Pick<..., "transaction_id" | "pending_transaction_id">`
+    // signature these fields are stripped from the type, so we cast to
+    // any at the boundary — the discriminator MUST be present at runtime
+    // for the test to be mutation-tight: a re-added
+    // `byCompoundKey.get(`${incoming.account_id}:${incoming.name}:${incoming.amount}`)`
+    // fallback would otherwise compute `"undefined:undefined:undefined"`
+    // and miss the stored row's `"acc-1:NETFLIX:14.99"` key, letting the
+    // regression through the guard.
     const lastMonth = makeTx({
       transaction_id: "tx-jan",
       account_id: "acc-1",
@@ -131,7 +142,14 @@ describe("findStoredTransaction", () => {
     });
     const maps = buildTransactionLookupMaps([lastMonth]);
     const thisMonth = findStoredTransaction(
-      { transaction_id: "tx-feb", pending_transaction_id: null },
+      {
+        transaction_id: "tx-feb",
+        pending_transaction_id: null,
+        account_id: "acc-1",
+        name: "NETFLIX",
+        amount: 14.99,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any,
       maps,
     );
     expect(thisMonth).toBeUndefined();
