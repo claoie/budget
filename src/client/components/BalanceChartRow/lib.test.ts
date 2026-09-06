@@ -82,6 +82,21 @@ describe("getBudgetColumns — capacity shapes the picker already classifies", (
     expect(named(liabilities)).toEqual([]);
   });
 
+  test("an unlimited INCOME rollover budget is skipped on a finite carry too", () => {
+    // The negative sentinel only reaches the capacity guard on this path: a
+    // non-rollover budget's -MAX_FLOAT becomes +MAX_FLOAT once negated, so the
+    // guard on the stacked amount catches it and the capacity guard's
+    // `Math.abs` never has to hold. With a rollover carry the negation is gone
+    // and the amount guard sees an ordinary number, so this is the only case
+    // that pins the guard against the negative sentinel.
+    const unlimited = budget("Unlimited income", -MAX_FLOAT, true);
+
+    const { assets, liabilities } = columnsOf([unlimited], { [unlimited.id]: 1200 });
+
+    expect(named(assets)).toEqual([]);
+    expect(named(liabilities)).toEqual([]);
+  });
+
   test("a non-rollover income budget stacks as an asset and its note names the period target", () => {
     const income = budget("Paycheck", -3000);
 
