@@ -293,10 +293,6 @@ export const searchTransactionsByAccountId = async (
   account_ids: string[],
   range?: { start?: Date; end?: Date },
   options?: {
-    /** When true, soft-deleted (`is_deleted = TRUE`) rows are included.
-     *  Used by the sync-plaid lookup path so an incoming posted row can
-     *  inherit its label from a pending row that was soft-deleted before
-     *  the posted version arrived (`sync-plaid.ts#findStoredTransaction`). */
     includeDeleted?: boolean;
   },
 ): Promise<{

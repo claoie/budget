@@ -138,9 +138,6 @@ export const syncPlaidTransactions = async (item_id: string) => {
   const startDate = itemUpdated ? getOneMonthBefore(itemUpdated) : getTwoYearsAgo();
 
   const range = { start: startDate, end: new Date() };
-  // `includeDeleted: true` so `findStoredTransaction` can inherit a label
-  // from a pending row that was soft-deleted before the posted version
-  // arrived — the label preference outlives the row's `is_deleted` flag.
   const storedTransactionsPromise = searchTransactionsByAccountId(user, accountIds, range, {
     includeDeleted: true,
   });
@@ -240,14 +237,8 @@ export const syncPlaidTransactions = async (item_id: string) => {
 
       const filledInvestments = investmentTransactions.map(fillDateStrings);
 
-      // Get stored investment transactions. The shared
-      // `storedTransactionsPromise` fetches with `includeDeleted: true` so the
-      // transactions branch can inherit labels from soft-deleted pending
-      // rows — a bystander concern for the invest branch, which passes
-      // stored rows into `getPlaidRemovedInvestmentTransactions` and would
-      // re-flag already-tombstoned rows as removed on every subsequent sync
-      // (bumping `updated` and inflating removedCount → spurious client
-      // resync). Filter to active-only here.
+      // Shared fetch is includeDeleted:true for the label-inherit path;
+      // the invest branch's removed-detector must not see tombstones.
       const storedTransactionsResult = await storedTransactionsPromise;
       const storedInvestmentTransactions = (
         storedTransactionsResult.investment_transactions || []
