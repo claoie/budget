@@ -43,17 +43,14 @@ export const buildTransactionLookupMaps = (
 ): {
   byTransactionId: Map<string, JSONTransaction>;
   byPendingId: Map<string, JSONTransaction>;
-  byCompoundKey: Map<string, JSONTransaction>;
 } => {
   const byTransactionId = new Map<string, JSONTransaction>();
   const byPendingId = new Map<string, JSONTransaction>();
-  const byCompoundKey = new Map<string, JSONTransaction>();
   for (const f of storedTransactions) {
     byTransactionId.set(f.transaction_id, f);
     if (f.pending_transaction_id) byPendingId.set(f.pending_transaction_id, f);
-    byCompoundKey.set(`${f.account_id}:${f.name}:${f.amount}`, f);
   }
-  return { byTransactionId, byPendingId, byCompoundKey };
+  return { byTransactionId, byPendingId };
 };
 
 /**
@@ -81,16 +78,33 @@ export const detectPendingPostedTransitions = (
   return transitions;
 };
 
-/** Find the stored transaction matching an incoming Plaid transaction using O(1) map lookups. */
+/**
+ * Find the stored transaction whose label should carry forward to an
+ * incoming Plaid transaction. Three id-based lookups in order of
+ * authority; no attribute-based (name/amount) fallback.
+ *
+ *  1. Exact `transaction_id` match — Plaid re-serving the same row.
+ *  2. Incoming's `pending_transaction_id` → any stored `transaction_id`.
+ *     Handles the canonical pending→posted transition: the pending row
+ *     was stored under id `P-1`; the posted row now arrives with
+ *     `transaction_id="POST-1", pending_transaction_id="P-1"`. This
+ *     preserves the label the user set on the pending row.
+ *  3. `byPendingId.get(incoming.transaction_id)` — mirror-image case
+ *     where a stored posted row back-points at an id that Plaid then
+ *     re-serves as pending. Rare, but keeps the id-based reconciliation
+ *     symmetric.
+ */
 export const findStoredTransaction = (
-  incoming: Pick<JSONTransaction, "transaction_id" | "account_id" | "name" | "amount">,
+  incoming: Pick<JSONTransaction, "transaction_id" | "pending_transaction_id">,
   maps: ReturnType<typeof buildTransactionLookupMaps>,
 ): JSONTransaction | undefined => {
-  return (
-    maps.byTransactionId.get(incoming.transaction_id) ??
-    maps.byPendingId.get(incoming.transaction_id) ??
-    maps.byCompoundKey.get(`${incoming.account_id}:${incoming.name}:${incoming.amount}`)
-  );
+  const byIncomingId = maps.byTransactionId.get(incoming.transaction_id);
+  if (byIncomingId) return byIncomingId;
+  if (incoming.pending_transaction_id) {
+    const byIncomingPendingId = maps.byTransactionId.get(incoming.pending_transaction_id);
+    if (byIncomingPendingId) return byIncomingPendingId;
+  }
+  return maps.byPendingId.get(incoming.transaction_id);
 };
 
 /** Identify recently-stored investment transactions that are no longer in the incoming list. */
@@ -124,7 +138,9 @@ export const syncPlaidTransactions = async (item_id: string) => {
   const startDate = itemUpdated ? getOneMonthBefore(itemUpdated) : getTwoYearsAgo();
 
   const range = { start: startDate, end: new Date() };
-  const storedTransactionsPromise = searchTransactionsByAccountId(user, accountIds, range);
+  const storedTransactionsPromise = searchTransactionsByAccountId(user, accountIds, range, {
+    includeDeleted: true,
+  });
 
   let addedCount = 0;
   let modifiedCount = 0;
@@ -221,9 +237,12 @@ export const syncPlaidTransactions = async (item_id: string) => {
 
       const filledInvestments = investmentTransactions.map(fillDateStrings);
 
-      // Get stored investment transactions
+      // Shared fetch is includeDeleted:true for the label-inherit path;
+      // the invest branch's removed-detector must not see tombstones.
       const storedTransactionsResult = await storedTransactionsPromise;
-      const storedInvestmentTransactions = storedTransactionsResult.investment_transactions || [];
+      const storedInvestmentTransactions = (
+        storedTransactionsResult.investment_transactions || []
+      ).filter((e) => !e.is_deleted);
 
       const removed = getPlaidRemovedInvestmentTransactions(
         filledInvestments,

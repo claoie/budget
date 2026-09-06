@@ -292,6 +292,9 @@ export const searchTransactionsByAccountId = async (
   user: MaskedUser,
   account_ids: string[],
   range?: { start?: Date; end?: Date },
+  options?: {
+    includeDeleted?: boolean;
+  },
 ): Promise<{
   transactions: JSONTransaction[];
   investment_transactions: JSONInvestmentTransaction[];
@@ -303,6 +306,8 @@ export const searchTransactionsByAccountId = async (
       ? { column: DATE, start: range?.start, end: range?.end }
       : undefined;
 
+  const excludeDeleted = !options?.includeDeleted;
+
   const [txModels, invModels] = await Promise.all([
     transactionsTable.query(
       { [USER_ID]: user.user_id },
@@ -310,6 +315,7 @@ export const searchTransactionsByAccountId = async (
         inFilters: { [ACCOUNT_ID]: account_ids },
         dateRange,
         orderBy: `${DATE} DESC`,
+        excludeDeleted,
       },
     ),
     investmentTransactionsTable.query(
@@ -318,6 +324,7 @@ export const searchTransactionsByAccountId = async (
         inFilters: { [ACCOUNT_ID]: account_ids },
         dateRange,
         orderBy: `${DATE} DESC`,
+        excludeDeleted,
       },
     ),
   ]);
