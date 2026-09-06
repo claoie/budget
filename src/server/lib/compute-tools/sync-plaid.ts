@@ -240,9 +240,18 @@ export const syncPlaidTransactions = async (item_id: string) => {
 
       const filledInvestments = investmentTransactions.map(fillDateStrings);
 
-      // Get stored investment transactions
+      // Get stored investment transactions. The shared
+      // `storedTransactionsPromise` fetches with `includeDeleted: true` so the
+      // transactions branch can inherit labels from soft-deleted pending
+      // rows — a bystander concern for the invest branch, which passes
+      // stored rows into `getPlaidRemovedInvestmentTransactions` and would
+      // re-flag already-tombstoned rows as removed on every subsequent sync
+      // (bumping `updated` and inflating removedCount → spurious client
+      // resync). Filter to active-only here.
       const storedTransactionsResult = await storedTransactionsPromise;
-      const storedInvestmentTransactions = storedTransactionsResult.investment_transactions || [];
+      const storedInvestmentTransactions = (
+        storedTransactionsResult.investment_transactions || []
+      ).filter((e) => !e.is_deleted);
 
       const removed = getPlaidRemovedInvestmentTransactions(
         filledInvestments,

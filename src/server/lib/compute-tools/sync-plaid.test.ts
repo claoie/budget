@@ -118,21 +118,15 @@ describe("findStoredTransaction", () => {
   });
 
   it("returns undefined when no id-based match exists (recurring same-name-and-amount rows are no longer a false match)", () => {
-    // Historic bug: a monthly $14.99 NETFLIX charge would inherit the
-    // previous month's label via the removed compound-key fallback.
-    // With the fallback gone, a genuinely-new transaction with no
-    // pending back-pointer and no id collision must return undefined.
-    //
-    // The `thisMonth` fixture INTENTIONALLY carries the same discriminator
-    // triple as `lastMonth` (account_id / name / amount). Under the
-    // narrowed `Pick<..., "transaction_id" | "pending_transaction_id">`
-    // signature these fields are stripped from the type, so we cast to
-    // any at the boundary — the discriminator MUST be present at runtime
-    // for the test to be mutation-tight: a re-added
-    // `byCompoundKey.get(`${incoming.account_id}:${incoming.name}:${incoming.amount}`)`
-    // fallback would otherwise compute `"undefined:undefined:undefined"`
-    // and miss the stored row's `"acc-1:NETFLIX:14.99"` key, letting the
-    // regression through the guard.
+    // `thisMonth` INTENTIONALLY carries the same (account_id, name, amount)
+    // triple as `lastMonth`. Under the narrowed
+    // `Pick<..., "transaction_id" | "pending_transaction_id">` signature
+    // these fields are stripped from the type, so we cast to any at the
+    // boundary — the discriminator MUST be present at runtime for the
+    // test to be mutation-tight: a compound-key lookup on an incoming
+    // stripped to `{transaction_id, pending_transaction_id}` would key
+    // off `"undefined:undefined:undefined"` and miss the stored row's
+    // `"acc-1:NETFLIX:14.99"` even if the fallback were re-added.
     const lastMonth = makeTx({
       transaction_id: "tx-jan",
       account_id: "acc-1",
