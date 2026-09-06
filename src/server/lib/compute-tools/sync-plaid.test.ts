@@ -50,12 +50,6 @@ describe("buildTransactionLookupMaps", () => {
     expect(maps.byPendingId.size).toBe(0);
   });
 
-  it("indexes by compound key account_id:name:amount", () => {
-    const tx = makeTx({ transaction_id: "tx-1", account_id: "acc-1", name: "Coffee", amount: 5 });
-    const maps = buildTransactionLookupMaps([tx]);
-    expect(maps.byCompoundKey.get("acc-1:Coffee:5")).toBe(tx);
-  });
-
   it("handles multiple transactions", () => {
     const tx1 = makeTx({ transaction_id: "tx-1" });
     const tx2 = makeTx({ transaction_id: "tx-2" });
@@ -67,50 +61,102 @@ describe("buildTransactionLookupMaps", () => {
 // ─── findStoredTransaction ────────────────────────────────────────────────────
 
 describe("findStoredTransaction", () => {
-  it("matches by transaction_id", () => {
+  it("matches by transaction_id (Plaid re-serves the same id)", () => {
     const stored = makeTx({ transaction_id: "tx-1" });
     const maps = buildTransactionLookupMaps([stored]);
     const result = findStoredTransaction(
-      { transaction_id: "tx-1", account_id: "acc-X", name: "Other", amount: 999 },
+      { transaction_id: "tx-1", pending_transaction_id: null },
       maps,
     );
     expect(result).toBe(stored);
   });
 
-  it("matches by pending_transaction_id", () => {
-    const stored = makeTx({ transaction_id: "tx-settled", pending_transaction_id: "ptx-1" });
-    const maps = buildTransactionLookupMaps([stored]);
+  it("matches when incoming.pending_transaction_id equals a stored transaction_id (canonical pending→posted, the primary label-inherit path)", () => {
+    const storedPending = makeTx({
+      transaction_id: "PENDING-1",
+      pending_transaction_id: null,
+      label: { budget_id: "b-1" } as never,
+    });
+    const maps = buildTransactionLookupMaps([storedPending]);
     const result = findStoredTransaction(
-      { transaction_id: "ptx-1", account_id: "acc-X", name: "Other", amount: 999 },
+      { transaction_id: "POSTED-1", pending_transaction_id: "PENDING-1" },
       maps,
     );
-    expect(result).toBe(stored);
+    expect(result).toBe(storedPending);
+    expect(result?.label).toEqual({ budget_id: "b-1" });
   });
 
-  it("matches by compound key when id lookups miss", () => {
-    const stored = makeTx({ transaction_id: "tx-old", account_id: "acc-1", name: "Coffee", amount: 5 });
-    const maps = buildTransactionLookupMaps([stored]);
+  it("matches via byPendingId when incoming's id equals a stored row's pending_transaction_id (mirror-image edge case)", () => {
+    const storedPosted = makeTx({
+      transaction_id: "POSTED-1",
+      pending_transaction_id: "ptx-1",
+    });
+    const maps = buildTransactionLookupMaps([storedPosted]);
     const result = findStoredTransaction(
-      { transaction_id: "tx-new", account_id: "acc-1", name: "Coffee", amount: 5 },
+      { transaction_id: "ptx-1", pending_transaction_id: null },
       maps,
     );
-    expect(result).toBe(stored);
+    expect(result).toBe(storedPosted);
   });
 
-  it("returns undefined when no match found", () => {
-    const stored = makeTx({ transaction_id: "tx-1", account_id: "acc-1", name: "Coffee", amount: 5 });
+  it("prefers the exact transaction_id match over the pending_transaction_id fallback", () => {
+    const exactMatch = makeTx({
+      transaction_id: "tx-1",
+      label: { budget_id: "b-exact" } as never,
+    });
+    const pendingMatch = makeTx({
+      transaction_id: "PENDING-1",
+      label: { budget_id: "b-pending" } as never,
+    });
+    const maps = buildTransactionLookupMaps([exactMatch, pendingMatch]);
+    const result = findStoredTransaction(
+      { transaction_id: "tx-1", pending_transaction_id: "PENDING-1" },
+      maps,
+    );
+    expect(result).toBe(exactMatch);
+    expect(result?.label).toEqual({ budget_id: "b-exact" });
+  });
+
+  it("returns undefined when no id-based match exists (recurring same-name-and-amount rows are no longer a false match)", () => {
+    // Historic bug: a monthly $14.99 NETFLIX charge would inherit the
+    // previous month's label via the removed compound-key fallback.
+    // With the fallback gone, a genuinely-new transaction with no
+    // pending back-pointer and no id collision must return undefined.
+    const lastMonth = makeTx({
+      transaction_id: "tx-jan",
+      account_id: "acc-1",
+      name: "NETFLIX",
+      amount: 14.99,
+      label: { budget_id: "b-subs" } as never,
+    });
+    const maps = buildTransactionLookupMaps([lastMonth]);
+    const thisMonth = findStoredTransaction(
+      { transaction_id: "tx-feb", pending_transaction_id: null },
+      maps,
+    );
+    expect(thisMonth).toBeUndefined();
+  });
+
+  it("returns undefined when incoming has no pending_transaction_id and no id match", () => {
+    const stored = makeTx({ transaction_id: "tx-1" });
     const maps = buildTransactionLookupMaps([stored]);
     const result = findStoredTransaction(
-      { transaction_id: "tx-2", account_id: "acc-2", name: "Tea", amount: 3 },
+      { transaction_id: "tx-fresh", pending_transaction_id: null },
       maps,
     );
     expect(result).toBeUndefined();
   });
 
-  it("preserves label from stored transaction", () => {
-    const stored = makeTx({ transaction_id: "tx-1", label: { budget_id: "b-1" } as never });
+  it("preserves label from stored transaction on the exact-id path", () => {
+    const stored = makeTx({
+      transaction_id: "tx-1",
+      label: { budget_id: "b-1" } as never,
+    });
     const maps = buildTransactionLookupMaps([stored]);
-    const result = findStoredTransaction({ transaction_id: "tx-1", account_id: "", name: "", amount: 0 }, maps);
+    const result = findStoredTransaction(
+      { transaction_id: "tx-1", pending_transaction_id: null },
+      maps,
+    );
     expect(result?.label).toEqual({ budget_id: "b-1" });
   });
 });

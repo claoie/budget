@@ -292,6 +292,13 @@ export const searchTransactionsByAccountId = async (
   user: MaskedUser,
   account_ids: string[],
   range?: { start?: Date; end?: Date },
+  options?: {
+    /** When true, soft-deleted (`is_deleted = TRUE`) rows are included.
+     *  Used by the sync-plaid lookup path so an incoming posted row can
+     *  inherit its label from a pending row that was soft-deleted before
+     *  the posted version arrived (`sync-plaid.ts#findStoredTransaction`). */
+    includeDeleted?: boolean;
+  },
 ): Promise<{
   transactions: JSONTransaction[];
   investment_transactions: JSONInvestmentTransaction[];
@@ -303,6 +310,8 @@ export const searchTransactionsByAccountId = async (
       ? { column: DATE, start: range?.start, end: range?.end }
       : undefined;
 
+  const excludeDeleted = !options?.includeDeleted;
+
   const [txModels, invModels] = await Promise.all([
     transactionsTable.query(
       { [USER_ID]: user.user_id },
@@ -310,6 +319,7 @@ export const searchTransactionsByAccountId = async (
         inFilters: { [ACCOUNT_ID]: account_ids },
         dateRange,
         orderBy: `${DATE} DESC`,
+        excludeDeleted,
       },
     ),
     investmentTransactionsTable.query(
@@ -318,6 +328,7 @@ export const searchTransactionsByAccountId = async (
         inFilters: { [ACCOUNT_ID]: account_ids },
         dateRange,
         orderBy: `${DATE} DESC`,
+        excludeDeleted,
       },
     ),
   ]);
