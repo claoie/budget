@@ -9,14 +9,15 @@ const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
  * The two directions ask different questions, so they scan different trees.
  *
  * "Is every read documented?" is about the knobs an operator supplies to the
- * running server, so it scans `src/`. A one-off script's own env surface has no
- * business in a deployment's env file.
+ * running server, so it scans `src/` plus the healthcheck the runtime image
+ * runs as its HEALTHCHECK command. A one-off script's own env surface, and the
+ * host's build config, have no business in a deployment's env file — which is
+ * why the runtime root file is named rather than the whole root scanned.
  *
  * "Is this entry dead?" is about whether anything at all reads the name, so it
- * spans every tree that ships or runs — including files at the repo root, which
- * is where the container healthcheck lives.
+ * spans every tree that ships or runs, root files included.
  */
-const SERVER_ROOTS = ["src"];
+const SERVER_ROOTS = ["src", "healthcheck.js"];
 const ALL_ROOTS = ["src", "scripts", "."];
 
 const SOURCE_FILE = /\.(?:[mc]?[jt]sx?)$/;
@@ -41,9 +42,10 @@ const sourceFiles = (dir: string, recurse: boolean): string[] =>
 
 const filesUnder = (roots: string[]): string[] =>
   roots.flatMap((root) => {
-    const dir = path.join(REPO_ROOT, root);
-    if (!existsSync(dir)) return [];
-    return sourceFiles(dir, root !== ".");
+    const full = path.join(REPO_ROOT, root);
+    if (!existsSync(full)) return [];
+    if (!statSync(full).isDirectory()) return [full];
+    return sourceFiles(full, root !== ".");
   });
 
 const SCRIPT_KIND: Record<string, ts.ScriptKind> = {
@@ -57,16 +59,30 @@ const SCRIPT_KIND: Record<string, ts.ScriptKind> = {
   ".jsx": ts.ScriptKind.JSX,
 };
 
-/** `process.env` / `Bun.env`, in optional-chained form too. */
+/**
+ * `process.env` / `Bun.env`, in optional-chained form too.
+ *
+ * The client's `import.meta.env` is out of scope: Vite's own built-ins live
+ * there alongside `VITE_*`, so it is a separate surface with a separate
+ * contract, not an entry this template is expected to carry.
+ */
 const isEnvObject = (node: ts.Node): boolean =>
   ts.isPropertyAccessExpression(node) &&
   node.name.text === "env" &&
   ts.isIdentifier(node.expression) &&
   (node.expression.text === "process" || node.expression.text === "Bun");
 
+/** `??=`, `||=`, `&&=` — an assignment whose whole point is to read first. */
+const LOGICAL_ASSIGNMENT = new Set<ts.SyntaxKind>([
+  ts.SyntaxKind.QuestionQuestionEqualsToken,
+  ts.SyntaxKind.BarBarEqualsToken,
+  ts.SyntaxKind.AmpersandAmpersandEqualsToken,
+]);
+
 /**
  * A variable the server assigns to itself is not a surface an operator
- * supplies, so writes are excluded whatever their operator.
+ * supplies. Logical assignment is the exception: `process.env.X ??= "default"`
+ * exists to defer to whatever the operator supplied, so `X` stays a read.
  */
 const isWriteTarget = (access: ts.Node): boolean => {
   const parent = access.parent;
@@ -80,6 +96,7 @@ const isWriteTarget = (access: ts.Node): boolean => {
   }
   if (ts.isBinaryExpression(parent) && parent.left === access) {
     const { kind } = parent.operatorToken;
+    if (LOGICAL_ASSIGNMENT.has(kind)) return false;
     return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
   }
   return false;
@@ -190,6 +207,12 @@ describe(".env.example", () => {
     expect(dead).toEqual([]);
   });
 
+  /**
+   * No exemption list, unlike the dead direction: an unfollowable env access is
+   * a gap in what the other two assertions can see, so it is fixed at the call
+   * site rather than declared. `{ ...process.env }` stays available in tests,
+   * which this scan excludes.
+   */
   it("has no env access whose variable name it cannot resolve", () => {
     expect(collect(ALL_ROOTS).opaque).toEqual([]);
   });
