@@ -1,3 +1,4 @@
+import { BUDGET_NAME_REQUIRED_MESSAGE } from "common";
 import {
   Route,
   updateBudget,
@@ -47,7 +48,7 @@ export const postBudgetRoute = new Route("POST", "/budget", async (req) => {
   const { budget_id, ...data } = body;
 
   if (typeof data.name === "string" && data.name.trim() === "") {
-    return { status: "failed", message: "Budget name cannot be empty." };
+    return { status: "failed", message: BUDGET_NAME_REQUIRED_MESSAGE };
   }
 
   try {

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getDateTimeString, LocalDate } from "common";
+import { BUDGET_NAME_REQUIRED_MESSAGE, getDateTimeString, LocalDate } from "common";
 import { Capacity, useAppContext, PATH } from "client";
 import { NameInput, Bar, ActionButtons, BudgetProperties } from "client/components";
 import { BudgetFamily } from "client/lib/models/BudgetFamily";
@@ -130,7 +130,7 @@ export const BudgetConfigPage = () => {
 
   const onComplete = async () => {
     if (budgetLike.type === "budget" && !nameInput?.trim()) {
-      window.alert("Budget name cannot be empty.");
+      window.alert(BUDGET_NAME_REQUIRED_MESSAGE);
       return;
     }
 

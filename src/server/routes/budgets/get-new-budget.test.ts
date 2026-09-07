@@ -68,20 +68,25 @@ const fakeRes = () =>
     end() {},
   }) as unknown as Parameters<typeof getNewBudgetRoute.execute>[1];
 
+const CAPACITY_ID = "9c1d3a44-2b6e-4f10-8f7a-1d5c2e6b0a93";
+
+/** Every field disagrees with the literal `createBudget` defaults to, so a
+ *  route that echoed the row and a route that synthesised a constant cannot
+ *  produce the same response on this data. */
 const insertedRow = (): Row => ({
   budget_id: BUDGET_ID,
   user_id: USER_ID,
-  name: "New Budget",
-  iso_currency_code: "USD",
-  roll_over: false,
-  roll_over_start_date: null,
-  capacities: [],
+  name: "Renamed",
+  iso_currency_code: "EUR",
+  roll_over: true,
+  roll_over_start_date: "2026-01-15",
+  capacities: [{ capacity_id: CAPACITY_ID, month: 1200 }],
   updated: "2026-09-02T00:00:00.000Z",
   is_deleted: false,
 });
 
 describe("get-new-budget response body", () => {
-  test("returns the created budget, name included, so the client store matches the row", async () => {
+  test("the response body is the inserted row, not a synthesised default", async () => {
     db.insertReturns = [insertedRow()];
 
     const result = await getNewBudgetRoute.execute(
@@ -92,13 +97,26 @@ describe("get-new-budget response body", () => {
     expect(result?.status).toBe("success");
     const { budget } = (result as { body: { budget: Record<string, unknown> } }).body;
     expect(budget.budget_id).toBe(BUDGET_ID);
-    expect(budget.name).toBe("New Budget");
-    expect(budget.iso_currency_code).toBe("USD");
-    expect(budget.roll_over).toBe(false);
-    expect(budget.capacities).toEqual([]);
+    expect(budget.name).toBe("Renamed");
+    expect(budget.iso_currency_code).toBe("EUR");
+    expect(budget.roll_over).toBe(true);
+    expect(budget.roll_over_start_date).toBe("2026-01-15");
+    expect(budget.capacities).toEqual([{ capacity_id: CAPACITY_ID, month: 1200 }]);
+  });
+
+  test("the insert carries the new-budget defaults", async () => {
+    db.insertReturns = [insertedRow()];
+
+    await getNewBudgetRoute.execute(
+      makeReq({ user_id: USER_ID, username: "test" }),
+      fakeRes(),
+    );
 
     const [, values] = mockQuery.mock.calls[0];
     expect(values).toContain("New Budget");
+    expect(values).toContain("USD");
+    expect(values).toContain(false);
+    expect(values).toContain(USER_ID);
   });
 
   test("a failed insert reports failure instead of a body", async () => {
