@@ -43,7 +43,7 @@ const sourceFiles = (dir: string, recurse: boolean): string[] =>
 const filesUnder = (roots: string[]): string[] =>
   roots.flatMap((root) => {
     const full = path.join(REPO_ROOT, root);
-    if (!existsSync(full)) return [];
+    if (!existsSync(full)) throw new Error(`scan root is missing: ${root}`);
     if (!statSync(full).isDirectory()) return [full];
     return sourceFiles(full, root !== ".");
   });
@@ -83,6 +83,11 @@ const LOGICAL_ASSIGNMENT = new Set<ts.SyntaxKind>([
  * A variable the server assigns to itself is not a surface an operator
  * supplies. Logical assignment is the exception: `process.env.X ??= "default"`
  * exists to defer to whatever the operator supplied, so `X` stays a read.
+ *
+ * The arithmetic compounds and `++` / `--` read their left side too, and are
+ * still classified as writes: they derive a value from one the process already
+ * held rather than accept one. None is live here, but a `PATH`-shaped
+ * `process.env.X += ":/opt"` would be an operator surface this misses.
  */
 const isWriteTarget = (access: ts.Node): boolean => {
   const parent = access.parent;
