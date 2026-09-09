@@ -26,7 +26,8 @@
       "server/*": ["./server/*"],
       "common": ["./common"],
       "common/*": ["./common/*"],
-      "test-helpers": ["../scripts/test-helpers.ts"]
+      "test-helpers": ["../scripts/test-helpers.ts"],
+      "test-render": ["../scripts/test-render.tsx"]
     },
     "types": ["bun-types"]
   },

@@ -1,11 +1,15 @@
+import { GlobalRegistrator } from "@happy-dom/global-registrator";
+
 /**
  * Test preload — runs ONCE before any test file in `bun test`.
  *
  * Two jobs:
- *   1. Stub `globalThis.window = {}` so client-side env detection
- *      (`src/common/utils:environment`) resolves to "unknown" instead of
- *      "server" in test runs. Without this, `Dictionary.set()` no-ops
- *      and holdings-calculation tests fail.
+ *   1. Register happy-dom as the global DOM. That gives `@testing-library/react`
+ *      a document to render React components into, and it makes client-side env
+ *      detection (`src/common/utils:environment`) resolve to "unknown" rather
+ *      than "server" — without a `window`, `Dictionary.set()` no-ops and the
+ *      holdings-calculation tests fail. Server-side test files are unaffected:
+ *      `environment` reads "unknown" either way.
  *   2. Capture the REAL exports of leaf node-modules that tests
  *      commonly mock (`pg`, `bcrypt`). Tests can then `afterAll`-restore
  *      via these snapshots so a previous test file's
@@ -18,13 +22,17 @@
  *
  * The `globalThis.__REAL_*` properties are used by tests' afterAll
  * hooks via the `restoreLeaves()` helper in `scripts/test-helpers.ts`.
+ *
+ * React render helpers built on top of this live in `scripts/test-render.tsx`.
  */
 
-Object.assign(globalThis, { window: {} });
+// Sized to the phone viewport the app is designed against, so a component
+// that branches on window dimensions renders its narrow layout here too.
+GlobalRegistrator.register({ width: 390, height: 844, url: "http://localhost/" });
 
 // Capture real leaf-dep exports for tests' afterAll restoration. `require`
-// runs at statement-order (vs ESM `import` which hoists), so the window
-// stub above lands first — `common`-side modules consumed by these
+// runs at statement-order (vs ESM `import` which hoists), so the DOM
+// registration above lands first — `common`-side modules consumed by these
 // captures will see the stub.
 //
 // We spread the full namespace (not just a hand-picked subset) because

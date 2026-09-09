@@ -12,8 +12,8 @@
  */
 
 const THRESHOLDS = {
-  lines: 28,     // % — ratchet up as coverage improves (currently ~28.7%)
-  functions: 48, // % — ratchet up as coverage improves (currently ~48.9%)
+  lines: 28,     // % — ratchet up as coverage improves (currently ~40.6%)
+  functions: 48, // % — ratchet up as coverage improves (currently ~65.0%)
 };
 
 const LCOV_PATH = "coverage/lcov.info";
