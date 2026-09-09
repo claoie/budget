@@ -1,5 +1,5 @@
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 
 type Row = Record<string, unknown>;
 
@@ -8,7 +8,7 @@ const db = {
   updateError: null as Error | null,
 };
 
-const mockQuery = mock(async (sql: string, _values?: unknown[]) => {
+const { pg, mockQuery, clearQueryMocks } = createFakePg(async (sql: string, _values?: unknown[]) => {
   const rows = (() => {
     if (/^\s*UPDATE\s+categories\b/i.test(sql)) {
       if (db.updateError) throw db.updateError;
@@ -19,17 +19,7 @@ const mockQuery = mock(async (sql: string, _values?: unknown[]) => {
   return { rows: rows as unknown[], rowCount: rows.length as number | null };
 });
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 // `mock.module` is process-global in Bun and `restoreLeaves` only restores the
 // `pg` / `bcrypt` leaves, so spread the real module rather than replacing it —
@@ -49,7 +39,7 @@ afterAll(() => {
 });
 
 beforeEach(() => {
-  mockQuery.mockClear();
+  clearQueryMocks();
   mockSendAlarm.mockClear();
   db.updateReturns = [];
   db.updateError = null;
@@ -110,7 +100,7 @@ describe("post-category typed body fields", () => {
 
   test("a non-date roll_over_start_date is refused before it reaches the DATE column", async () => {
     for (const value of ["hello", "", "2026-02-30"]) {
-      mockQuery.mockClear();
+      clearQueryMocks();
       mockSendAlarm.mockClear();
       await rejects(
         { category_id: UUID, roll_over_start_date: value },
@@ -121,7 +111,7 @@ describe("post-category typed body fields", () => {
 
   test("a non-array capacities is refused before it lands in the JSONB column", async () => {
     for (const capacities of ["abc", 5, { a: 1 }, null]) {
-      mockQuery.mockClear();
+      clearQueryMocks();
       mockSendAlarm.mockClear();
       await rejects({ category_id: UUID, capacities }, "Field capacities must be an array");
     }

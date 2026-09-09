@@ -72,3 +72,65 @@ export const updateColumnsOf = (sql: string): string[] => {
     .map((part) => part.trim().split(/\s*=/)[0].trim())
     .filter(Boolean);
 };
+
+/** What every `createFakePg` query resolves to. */
+export interface FakeQueryResult {
+  rows: unknown[];
+  rowCount: number | null;
+}
+
+export type FakeQuery = (sql: string, values?: unknown[]) => Promise<FakeQueryResult>;
+
+const resolveEmpty: FakeQuery = async () => ({ rows: [], rowCount: 0 });
+
+/**
+ * Build a `pg` module stub whose pool and transaction client are *separate*
+ * mocks.
+ *
+ * `withTransaction` reaches the database through `pool.connect()`, so a
+ * `connect()` that hands back `pool.query` collapses both into one call log
+ * and no assertion can tell where a statement ran. Dropping the `client`
+ * argument from a cascade then leaves the suite green while, in production,
+ * that cascade commits on its own and survives the caller's rollback.
+ *
+ * Assert an in-transaction statement against `mockClientQuery`, and its
+ * absence from `mockQuery`.
+ *
+ * ```ts
+ * const { pg, mockQuery, mockClientQuery, resetQueryMocks } = createFakePg();
+ * mock.module("pg", () => pg);
+ * ```
+ *
+ * `resetQueryMocks` puts `implementation` back afterwards: bun's `mockReset`
+ * drops it, and a `query()` that resolves to `undefined` blows up inside
+ * `withTransaction` long before the assertion it was meant to reach.
+ */
+export const createFakePg = (implementation: FakeQuery = resolveEmpty) => {
+  const mockQuery = mock(implementation);
+  const mockClientQuery = mock(implementation);
+
+  class FakePool {
+    query = mockQuery;
+    end = async () => {};
+    connect = async () => ({ query: mockClientQuery, release: () => {} });
+  }
+
+  const types = { setTypeParser: () => {} };
+  const pg = { Pool: FakePool, types, default: { Pool: FakePool, types } };
+
+  return {
+    pg,
+    mockQuery,
+    mockClientQuery,
+    resetQueryMocks: () => {
+      mockQuery.mockReset();
+      mockClientQuery.mockReset();
+      mockQuery.mockImplementation(implementation);
+      mockClientQuery.mockImplementation(implementation);
+    },
+    clearQueryMocks: () => {
+      mockQuery.mockClear();
+      mockClientQuery.mockClear();
+    },
+  };
+};

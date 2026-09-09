@@ -1,11 +1,11 @@
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 import { getSquashedDateString } from "common";
 
 const issued: { sql: string; values?: unknown[] }[] = [];
 let ownedAccountRows: unknown[] = [];
 
-const mockQuery = mock(async (sql: string, values?: unknown[]) => {
+const { pg } = createFakePg(async (sql: string, values?: unknown[]) => {
   issued.push({ sql, values });
   if (/FROM\s+accounts/i.test(sql)) {
     return { rows: ownedAccountRows, rowCount: ownedAccountRows.length };
@@ -13,17 +13,7 @@ const mockQuery = mock(async (sql: string, values?: unknown[]) => {
   return { rows: [{ snapshot_id: "acct-A-20260701" }], rowCount: 1 };
 });
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 const { postSnapshotRoute } = await import("./post-snapshot");
 

@@ -2,39 +2,23 @@
 // `runTransferDetection` lost its DI seams (queryFn / logger /
 // fetchUsers / fetchCandidates / createPair). The function now calls
 // `usersTable.query` and `pool.query` directly, and writes to the real
-// `logger`. Bundle inlines all of that; the test leaf-mocks `pg` so
-// every SELECT/INSERT lands on `mockQuery` and stages responses per
-// scenario. The real logger emits its info/error lines to stderr —
+// `logger`. Bundle inlines all of that; the test leaf-mocks `pg` so the
+// user SELECT lands on `mockQuery` and every per-user-transaction
+// statement on `mockClientQuery`, and stages responses per scenario. The real logger emits its info/error lines to stderr —
 // no behaviour change from the original `noopLogger` since the test's
 // assertions never read those calls.
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 
-const mockQuery = mock(async (_sql: string, _values?: unknown[]) => ({
-  rows: [] as unknown[],
-  rowCount: 0 as number | null,
-}));
+const { pg, mockQuery, mockClientQuery, resetQueryMocks } = createFakePg();
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 const { runTransferDetection, scoreConfidence } = await import("./detect\-transfers");
 
 afterAll(restoreLeaves);
 
-beforeEach(() => {
-  mockQuery.mockReset();
-  mockQuery.mockImplementation(async () => ({ rows: [], rowCount: 0 }));
-});
+beforeEach(resetQueryMocks);
 
 /** Raw users row matching UserModel's schema. */
 const userRow = (overrides: Record<string, unknown> = {}) => ({
@@ -54,7 +38,7 @@ const userRow = (overrides: Record<string, unknown> = {}) => ({
  * route issues one INSERT per accepted candidate.
  */
 const findInsertCalls = (): Array<{ sql: string; values: unknown[] }> =>
-  mockQuery.mock.calls
+  mockClientQuery.mock.calls
     .map((c) => ({ sql: c[0] as string, values: c[1] as unknown[] }))
     .filter((c) => /INSERT\s+INTO\s+transaction_pairs/i.test(c.sql));
 
@@ -102,7 +86,7 @@ function setupMock(opts: {
   const users = opts.users ?? [];
   const insertResult = opts.insertResult ?? { rows: [], rowCount: 1 };
 
-  mockQuery.mockImplementation(async (sql: string, values?: unknown[]) => {
+  const respond = async (sql: string, values?: unknown[]) => {
     // Boilerplate (transaction control): all return empty.
     if (
       /^\s*(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE|ROLLBACK TO)\b/i.test(sql) ||
@@ -137,7 +121,12 @@ function setupMock(opts: {
       return insertResult;
     }
     return { rows: [], rowCount: 0 };
-  });
+  };
+
+  // `fetchUsers` is the only statement outside the per-user transaction;
+  // the rest travel on the client `pool.connect()` hands back.
+  mockQuery.mockImplementation(respond);
+  mockClientQuery.mockImplementation(respond);
 }
 
 describe("runTransferDetection", () => {
@@ -196,16 +185,19 @@ describe("runTransferDetection", () => {
 
     await runTransferDetection();
 
-    const calls = mockQuery.mock.calls.map((c) => c[0] as string);
+    const calls = mockClientQuery.mock.calls.map((c) => c[0] as string);
     const begins = calls.filter((s) => /^BEGIN$/i.test(s));
     const locks = calls.filter((s) => /pg_advisory_xact_lock/i.test(s));
     const commits = calls.filter((s) => /^COMMIT$/i.test(s));
     expect(begins).toHaveLength(1);
     expect(locks).toHaveLength(1);
     expect(commits).toHaveLength(1);
+    // The pool sees only the user list. A BEGIN there would mean the work ran
+    // on a connection the advisory lock never covered.
+    expect(mockQuery.mock.calls.map((c) => c[0] as string)).not.toContain("BEGIN");
     // Lock key uses the user_id (so engine + manual mutations on the same
     // user serialize). Round 1 (`pairTransactions`) uses the same key.
-    const lockCall = mockQuery.mock.calls.find((c) =>
+    const lockCall = mockClientQuery.mock.calls.find((c) =>
       /pg_advisory_xact_lock/i.test(c[0] as string),
     )!;
     expect(lockCall[1] as unknown[]).toContain("user-1");
@@ -241,12 +233,12 @@ describe("runTransferDetection", () => {
     expect(inserts[0].values).toContain("g-a");
     expect(inserts[0].values).toContain("g-b");
     // user-bad's transaction must have ROLLBACK'd.
-    const rollbacks = mockQuery.mock.calls.filter(
+    const rollbacks = mockClientQuery.mock.calls.filter(
       (c) => /^ROLLBACK$/i.test(c[0] as string),
     );
     expect(rollbacks.length).toBeGreaterThanOrEqual(1);
     // user-good's transaction must have COMMITted.
-    const commits = mockQuery.mock.calls.filter((c) => /^COMMIT$/i.test(c[0] as string));
+    const commits = mockClientQuery.mock.calls.filter((c) => /^COMMIT$/i.test(c[0] as string));
     expect(commits).toHaveLength(1);
   });
 
@@ -258,11 +250,11 @@ describe("runTransferDetection", () => {
       rowCount: 2,
     });
     // user-bad's stale-pair cleanup UPDATE — throws (simulates fail point)
-    mockQuery.mockRejectedValueOnce(new Error("boom"));
+    mockClientQuery.mockRejectedValueOnce(new Error("boom"));
     // user-good's stale-pair cleanup UPDATE → 0 cleaned.
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
     // user-good's SELECT candidates → one matching pair
-    mockQuery.mockResolvedValueOnce({
+    mockClientQuery.mockResolvedValueOnce({
       rows: [
         {
           transaction_id_a: "g-a",
@@ -274,7 +266,7 @@ describe("runTransferDetection", () => {
       rowCount: 1,
     });
     // INSERT for user-good's pair
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
     await runTransferDetection();
 
@@ -309,17 +301,17 @@ describe("runTransferDetection", () => {
     // second succeeded.
     expect(insertCalls).toHaveLength(2);
     // SAVEPOINT was issued for BOTH attempts.
-    const savepoints = mockQuery.mock.calls.filter((c) =>
+    const savepoints = mockClientQuery.mock.calls.filter((c) =>
       /^SAVEPOINT/i.test(c[0] as string),
     );
     expect(savepoints.length).toBeGreaterThanOrEqual(2);
     // ROLLBACK TO SAVEPOINT fired (for the failed first attempt).
-    const rollbackTos = mockQuery.mock.calls.filter((c) =>
+    const rollbackTos = mockClientQuery.mock.calls.filter((c) =>
       /^ROLLBACK TO SAVEPOINT/i.test(c[0] as string),
     );
     expect(rollbackTos.length).toBeGreaterThanOrEqual(1);
     // Outer transaction still COMMITs (we want the second pair to persist).
-    const commits = mockQuery.mock.calls.filter((c) => /^COMMIT$/i.test(c[0] as string));
+    const commits = mockClientQuery.mock.calls.filter((c) => /^COMMIT$/i.test(c[0] as string));
     expect(commits).toHaveLength(1);
   });
 
@@ -327,9 +319,9 @@ describe("runTransferDetection", () => {
     // Superseded by the savepoint-isolation test above.
     mockQuery.mockResolvedValueOnce({ rows: [userRow({ user_id: "user-1" })], rowCount: 1 });
     // Stale-pair cleanup UPDATE.
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
     // SELECT candidates → two matching pairs
-    mockQuery.mockResolvedValueOnce({
+    mockClientQuery.mockResolvedValueOnce({
       rows: [
         {
           transaction_id_a: "a1",
@@ -347,8 +339,8 @@ describe("runTransferDetection", () => {
       rowCount: 2,
     });
     // First INSERT rejects, second succeeds.
-    mockQuery.mockRejectedValueOnce(new Error("conflict"));
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
+    mockClientQuery.mockRejectedValueOnce(new Error("conflict"));
+    mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 });
 
     await runTransferDetection();
 
@@ -361,11 +353,11 @@ describe("runTransferDetection", () => {
     // Single user with no candidates — we only inspect the SELECT-candidates
     // SQL shape that the engine issues per user.
     mockQuery.mockResolvedValueOnce({ rows: [userRow({ user_id: "u-1" })], rowCount: 1 });
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
+    mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 });
 
     await runTransferDetection();
 
-    const candidateCalls = mockQuery.mock.calls.filter((c) =>
+    const candidateCalls = mockClientQuery.mock.calls.filter((c) =>
       /JOIN\s+transactions\s+t2/i.test(c[0] as string),
     );
     expect(candidateCalls).toHaveLength(1);

@@ -1,30 +1,17 @@
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 import type { JSONSecurity } from "common";
 
-const mockQuery = mock(async (_sql: string, _values?: unknown[]) => ({
-  rows: [] as unknown[],
-  rowCount: 0 as number | null,
-}));
+const { pg, mockQuery, clearQueryMocks } = createFakePg();
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 const { upsertSecuritiesWithSnapshots } = await import("./create-snapshots");
 
 afterAll(restoreLeaves);
 
 beforeEach(() => {
-  mockQuery.mockClear();
+  clearQueryMocks();
 });
 
 const mkSecurity = (overrides: Partial<JSONSecurity>): JSONSecurity =>

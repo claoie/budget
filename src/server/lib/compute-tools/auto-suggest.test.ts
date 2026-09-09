@@ -16,26 +16,13 @@
 //   - `FROM split_transactions`               → splitRows (per userId)
 //   - `UPDATE transactions`/`split_transactions` → captured + return ok
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const mockQuery = mock(async (_sql: string, _values?: unknown[]) => ({
-  rows: [] as unknown[],
-  rowCount: 0 as number | null,
-}));
+const { pg, mockQuery, resetQueryMocks } = createFakePg();
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 const { runAutoSuggestions, CAS_NULL_CONFIDENCE } = await import("./auto\-suggest");
 
@@ -129,7 +116,7 @@ const queryRouter = async (sql: string, values?: unknown[]) => {
 };
 
 beforeEach(() => {
-  mockQuery.mockReset();
+  resetQueryMocks();
   mockQuery.mockImplementation(queryRouter);
   userRows = [];
   unlabeledByUser = new Map();

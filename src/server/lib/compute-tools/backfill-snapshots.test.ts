@@ -23,24 +23,11 @@ process.env.POLYGON_API_KEY = "test-key";
 process.env.POLYGON_RATE_LIMIT_PER_MIN = "0";
 
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 
-const mockQuery = mock(async (_sql: string, _values?: unknown[]) => ({
-  rows: [] as unknown[],
-  rowCount: 0 as number | null,
-}));
+const { pg, mockQuery, resetQueryMocks } = createFakePg();
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 const mockFetch = mock(
   async (_url: string | URL | Request, _init?: RequestInit): Promise<Response> =>
@@ -133,7 +120,7 @@ const enqueueFetch = (responder: (url: string) => Response | Promise<Response>) 
 };
 
 beforeEach(() => {
-  mockQuery.mockReset();
+  resetQueryMocks();
   mockQuery.mockImplementation(queryRouter);
   securitiesRows = [];
   snapshotsRows = [];

@@ -1,23 +1,10 @@
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 import { AccountType, AccountSubtype } from "plaid";
 
-const mockQuery = mock(async (_sql: string, _values?: unknown[]) => ({
-  rows: [] as unknown[],
-  rowCount: 0 as number | null,
-}));
+const { pg, mockQuery, mockClientQuery, resetQueryMocks } = createFakePg();
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 const {
   getAccounts,
@@ -61,7 +48,7 @@ function makeAccountRow(overrides: Record<string, unknown> = {}) {
 const testUser = { user_id: "usr-1", username: "hoie" };
 
 beforeEach(() => {
-  mockQuery.mockReset();
+  resetQueryMocks();
 });
 
 describe("getAccounts", () => {
@@ -316,16 +303,17 @@ describe("deleteAccounts", () => {
     const result = await deleteAccounts(testUser, []);
     expect(result).toEqual({ deleted: 0 });
     expect(mockQuery).not.toHaveBeenCalled();
+    expect(mockClientQuery).not.toHaveBeenCalled();
   });
 
   test("soft-deletes snapshots by BOTH account_id and holding_account_id", async () => {
-    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+    mockClientQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     await deleteAccounts(testUser, ["acc-del"]);
 
     // Account-balance snapshots live under `account_id`; holding snapshots
     // live under `holding_account_id` (their `account_id` is NULL). Both
     // passes must fire or the holding-snapshot history is orphaned.
-    const snapshotDeletes = mockQuery.mock.calls
+    const snapshotDeletes = mockClientQuery.mock.calls
       .map(([sql]) => sql)
       .filter(
         (sql): sql is string =>
@@ -337,10 +325,10 @@ describe("deleteAccounts", () => {
   });
 
   test("cascades to transaction_pairs on both join columns, once for all accounts", async () => {
-    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+    mockClientQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     await deleteAccounts(testUser, ["acc-a", "acc-b"]);
 
-    const pairDeletes = mockQuery.mock.calls.filter(
+    const pairDeletes = mockClientQuery.mock.calls.filter(
       ([sql]) => typeof sql === "string" && /UPDATE\s+transaction_pairs\b/i.test(sql),
     );
 
@@ -363,13 +351,41 @@ describe("deleteAccounts", () => {
     expect(
       pairDeletes.some(([sql]) => /WHERE\s+transaction_id_b\s+IN\s*\(SELECT/i.test(sql as string)),
     ).toBe(true);
+
+    // On the pool the cascade commits on its own, so the `bulkSoftDelete` that
+    // follows can fail and roll the accounts back while their pairs stay
+    // soft-deleted. It also drops the row-lock serialization the cascade's
+    // ordering against a concurrent pairTransactions depends on.
+    expect(
+      mockQuery.mock.calls.some(
+        ([sql]) => typeof sql === "string" && /UPDATE\s+transaction_pairs\b/i.test(sql),
+      ),
+    ).toBe(false);
+  });
+
+  test("issues every write on the transaction client, never on the pool", async () => {
+    await deleteAccounts(testUser, ["acc-del"]);
+
+    // `deleteAccounts` opens with `withTransaction` and reads nothing first,
+    // so the pool must stay untouched for the whole call.
+    expect(mockQuery).not.toHaveBeenCalled();
+
+    const clientUpdates = mockClientQuery.mock.calls
+      .map(([sql]) => sql)
+      .filter((sql): sql is string => typeof sql === "string")
+      .map((sql) => sql.match(/^\s*UPDATE\s+(\w+)/i)?.[1])
+      .filter((table): table is string => !!table);
+    expect(clientUpdates).toContain("transaction_pairs");
+    expect(clientUpdates).toContain("transactions");
+    expect(clientUpdates).toContain("snapshots");
+    expect(clientUpdates).toContain("accounts");
   });
 
   test("runs the pairs cascade AFTER the transactions soft-delete", async () => {
-    mockQuery.mockResolvedValue({ rows: [], rowCount: 0 });
+    mockClientQuery.mockResolvedValue({ rows: [], rowCount: 0 });
     await deleteAccounts(testUser, ["acc-del"]);
 
-    const sqls = mockQuery.mock.calls
+    const sqls = mockClientQuery.mock.calls
       .map(([sql]) => sql)
       .filter((sql): sql is string => typeof sql === "string");
     const transactionsDelete = sqls.findIndex(

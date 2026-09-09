@@ -1,22 +1,9 @@
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 
-const mockQuery = mock(async (_sql: string, _values?: unknown[]) => ({
-  rows: [] as unknown[],
-  rowCount: 0 as number | null,
-}));
+const { pg, mockQuery, resetQueryMocks, clearQueryMocks } = createFakePg();
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 const { recordCategoryRejection } = await import("./record-category-rejection");
 
@@ -42,7 +29,7 @@ const prev = (
 afterAll(restoreLeaves);
 
 beforeEach(() => {
-  mockQuery.mockReset();
+  resetQueryMocks();
   mockQuery.mockImplementation(async () => ({ rows: [], rowCount: 0 }));
 });
 
@@ -140,7 +127,7 @@ describe("recordCategoryRejection — rejection happens ONLY when prev was a SUG
     );
     expect(findInsertRejection()).toBeUndefined();
 
-    mockQuery.mockClear();
+    clearQueryMocks();
     await recordCategoryRejection(
       fakeUser(),
       "tx-2",

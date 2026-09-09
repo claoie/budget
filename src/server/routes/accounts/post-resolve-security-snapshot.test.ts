@@ -16,29 +16,16 @@ process.env.POLYGON_API_KEY = "test-key";
 process.env.POLYGON_RATE_LIMIT_PER_MIN = "0";
 
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 import type { JSONSecurity } from "common";
 
 const originalFetch = globalThis.fetch;
 const originalApiKey = process.env.POLYGON_API_KEY;
 const originalRateLimit = process.env.POLYGON_RATE_LIMIT_PER_MIN;
 
-const mockQuery = mock(async (_sql: string, _values?: unknown[]) => ({
-  rows: [] as unknown[],
-  rowCount: 0 as number | null,
-}));
+const { pg, mockQuery, resetQueryMocks } = createFakePg();
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 let lastFetchUrl: string | null = null;
 const mockFetch = mock(
@@ -80,7 +67,7 @@ const queryRouter = async (sql: string, _values?: unknown[]) => {
 };
 
 beforeEach(() => {
-  mockQuery.mockReset();
+  resetQueryMocks();
   mockQuery.mockImplementation(queryRouter);
   securitiesRows = [];
   snapshotsRows = [];
