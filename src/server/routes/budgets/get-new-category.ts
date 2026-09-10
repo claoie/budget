@@ -1,6 +1,7 @@
+import { JSONCategory } from "common";
 import { Route, createCategory, requireQueryString, validationError } from "server";
 
-export type NewCategoryGetResponse = { category_id: string };
+export type NewCategoryGetResponse = { category: JSONCategory };
 
 export const getNewCategoryRoute = new Route<NewCategoryGetResponse>(
   "GET",
@@ -22,6 +23,6 @@ export const getNewCategoryRoute = new Route<NewCategoryGetResponse>(
     if (!response) {
       return { status: "failed", message: "Failed to create category." };
     }
-    return { status: "success", body: { category_id: response.category_id } };
+    return { status: "success", body: { category: response } };
   }
 );

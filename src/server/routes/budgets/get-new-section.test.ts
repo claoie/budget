@@ -8,7 +8,7 @@ const db = {
 };
 
 const mockQuery = mock(async (sql: string, _values?: unknown[]) => {
-  const rows = /^\s*INSERT\s+INTO\s+budgets\b/i.test(sql) ? db.insertReturns : [];
+  const rows = /^\s*INSERT\s+INTO\s+sections\b/i.test(sql) ? db.insertReturns : [];
   return { rows: rows as unknown[], rowCount: rows.length as number | null };
 });
 
@@ -24,7 +24,7 @@ mock.module("pg", () => ({
   default: { Pool: FakePool, types: { setTypeParser: () => {} } },
 }));
 
-const { getNewBudgetRoute } = await import("./get-new-budget");
+const { getNewSectionRoute } = await import("./get-new-section");
 
 afterAll(() => {
   restoreLeaves();
@@ -37,14 +37,18 @@ beforeEach(() => {
 
 const USER_ID = "11111111-1111-1111-1111-111111111111";
 const BUDGET_ID = "3f2504e0-4f89-11d3-9a0c-0305e82c3301";
+const SECTION_ID = "6ba7b810-9dad-11d1-80b4-00c04fd430c8";
 
-const makeReq = (user?: { user_id: string; username: string }) =>
+const makeReq = (
+  user?: { user_id: string; username: string },
+  query: Record<string, unknown> = { parent: BUDGET_ID },
+) =>
   ({
     method: "GET",
-    path: "/new-budget",
-    url: "http://x/api/new-budget",
+    path: "/new-section",
+    url: "http://x/api/new-section",
     headers: {},
-    query: {},
+    query,
     body: undefined,
     session: {
       id: "s-1",
@@ -53,7 +57,7 @@ const makeReq = (user?: { user_id: string; username: string }) =>
       destroy() {},
     },
     ip: "127.0.0.1",
-  }) as unknown as Parameters<typeof getNewBudgetRoute.execute>[0];
+  }) as unknown as Parameters<typeof getNewSectionRoute.execute>[0];
 
 const fakeRes = () =>
   ({
@@ -66,18 +70,18 @@ const fakeRes = () =>
       return true;
     },
     end() {},
-  }) as unknown as Parameters<typeof getNewBudgetRoute.execute>[1];
+  }) as unknown as Parameters<typeof getNewSectionRoute.execute>[1];
 
 const CAPACITY_ID = "9c1d3a44-2b6e-4f10-8f7a-1d5c2e6b0a93";
 
-/** Every field disagrees with the literal `createBudget` defaults to, so a
+/** Every field disagrees with the literal `createSection` defaults to, so a
  *  route that echoed the row and a route that synthesised a constant cannot
  *  produce the same response on this data. */
 const insertedRow = (): Row => ({
+  section_id: SECTION_ID,
   budget_id: BUDGET_ID,
   user_id: USER_ID,
   name: "Renamed",
-  iso_currency_code: "EUR",
   roll_over: true,
   roll_over_start_date: "2026-01-15",
   capacities: [{ capacity_id: CAPACITY_ID, month: 1200 }],
@@ -85,73 +89,80 @@ const insertedRow = (): Row => ({
   is_deleted: false,
 });
 
-describe("get-new-budget response body", () => {
+describe("get-new-section response body", () => {
   test("the response body is the inserted row, not a synthesised default", async () => {
     db.insertReturns = [insertedRow()];
 
-    const result = await getNewBudgetRoute.execute(
+    const result = await getNewSectionRoute.execute(
       makeReq({ user_id: USER_ID, username: "test" }),
       fakeRes(),
     );
 
     expect(result?.status).toBe("success");
-    const { budget } = (result as { body: { budget: Record<string, unknown> } }).body;
-    expect(budget.budget_id).toBe(BUDGET_ID);
-    expect(budget.name).toBe("Renamed");
-    expect(budget.iso_currency_code).toBe("EUR");
-    expect(budget.roll_over).toBe(true);
-    expect(budget.roll_over_start_date).toBe("2026-01-15");
-    expect(budget.capacities).toEqual([{ capacity_id: CAPACITY_ID, month: 1200 }]);
+    const { section } = (result as { body: { section: Record<string, unknown> } }).body;
+    expect(section.section_id).toBe(SECTION_ID);
+    expect(section.budget_id).toBe(BUDGET_ID);
+    expect(section.name).toBe("Renamed");
+    expect(section.roll_over).toBe(true);
+    expect(section.roll_over_start_date).toBe("2026-01-15");
+    expect(section.capacities).toEqual([{ capacity_id: CAPACITY_ID, month: 1200 }]);
   });
 
-  test("the response ships only the whitelisted budget fields", async () => {
+  test("the response ships only the whitelisted section fields", async () => {
     db.insertReturns = [insertedRow()];
 
-    const result = await getNewBudgetRoute.execute(
+    const result = await getNewSectionRoute.execute(
       makeReq({ user_id: USER_ID, username: "test" }),
       fakeRes(),
     );
 
-    const { budget } = (result as { body: { budget: Record<string, unknown> } }).body;
-    expect(Object.keys(budget).sort()).toEqual([
+    const { section } = (result as { body: { section: Record<string, unknown> } }).body;
+    expect(Object.keys(section).sort()).toEqual([
       "budget_id",
       "capacities",
-      "iso_currency_code",
       "name",
       "roll_over",
       "roll_over_start_date",
+      "section_id",
     ]);
   });
 
-  test("the insert carries the new-budget defaults", async () => {
+  test("the insert carries the new-section defaults and the parent budget", async () => {
     db.insertReturns = [insertedRow()];
 
-    await getNewBudgetRoute.execute(
-      makeReq({ user_id: USER_ID, username: "test" }),
-      fakeRes(),
-    );
+    await getNewSectionRoute.execute(makeReq({ user_id: USER_ID, username: "test" }), fakeRes());
 
     const [, values] = mockQuery.mock.calls[0];
-    expect(values).toContain("New Budget");
-    expect(values).toContain("USD");
+    expect(values).toContain("New Section");
     expect(values).toContain(false);
+    expect(values).toContain(BUDGET_ID);
     expect(values).toContain(USER_ID);
   });
 
   test("a failed insert reports failure instead of a body", async () => {
     db.insertReturns = [];
 
-    const result = await getNewBudgetRoute.execute(
+    const result = await getNewSectionRoute.execute(
       makeReq({ user_id: USER_ID, username: "test" }),
       fakeRes(),
     );
 
     expect(result?.status).toBe("failed");
-    expect((result as { message?: string }).message).toBe("Failed to create budget.");
+    expect((result as { message?: string }).message).toBe("Failed to create section.");
+  });
+
+  test("a missing parent never reaches the insert", async () => {
+    const result = await getNewSectionRoute.execute(
+      makeReq({ user_id: USER_ID, username: "test" }, {}),
+      fakeRes(),
+    );
+
+    expect(result?.status).toBe("failed");
+    expect(mockQuery).not.toHaveBeenCalled();
   });
 
   test("an unauthenticated request never reaches the insert", async () => {
-    const result = await getNewBudgetRoute.execute(makeReq(undefined), fakeRes());
+    const result = await getNewSectionRoute.execute(makeReq(undefined), fakeRes());
 
     expect(result?.status).toBe("failed");
     expect(mockQuery).not.toHaveBeenCalled();

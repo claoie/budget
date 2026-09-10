@@ -157,23 +157,25 @@ export const SectionBar = ({ section, onSetOrder }: Props) => {
   const onClickAddCategory = async () => {
     const queryString = "?" + new URLSearchParams({ parent: section_id }).toString();
     const newCategoryRequestUrl = "/api/new-category" + queryString;
-    const { body } = await call.get<NewCategoryGetResponse>(newCategoryRequestUrl);
+    const { status, body, message } = await call.get<NewCategoryGetResponse>(
+      newCategoryRequestUrl,
+    );
+    if (status !== "success" || !body) {
+      window.alert(message || "Failed to create category.");
+      return;
+    }
 
-    if (!body) return;
-
-    const { category_id } = body;
+    const { category } = body;
+    const { category_id } = category;
 
     setData((oldData) => {
-      if (category_id) {
-        const newData = new Data(oldData);
-        const newCategory = new Category({ category_id, section_id });
-        indexedDb.save(newCategory).catch(console.error);
-        const newCategories = new CategoryDictionary(newData.categories);
-        newCategories.set(category_id, newCategory);
-        newData.categories = newCategories;
-        return newData;
-      }
-      return oldData;
+      const newData = new Data(oldData);
+      const newCategory = new Category(category);
+      indexedDb.save(newCategory).catch(console.error);
+      const newCategories = new CategoryDictionary(newData.categories);
+      newCategories.set(category_id, newCategory);
+      newData.categories = newCategories;
+      return newData;
     });
 
     router.go(PATH.BUDGET_CONFIG, { params: new URLSearchParams({ category_id }) });

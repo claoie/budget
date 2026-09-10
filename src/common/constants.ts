@@ -50,6 +50,4 @@ export const CHARTS = TableName.Charts;
 export const API_KEYS = TableName.ApiKeys;
 export const REJECTED_CATEGORIES = TableName.RejectedCategories;
 
-/** Rejected by `POST /api/budget` and pre-checked by the budget config page,
- *  so the two sites cannot drift into telling the user different things. */
 export const BUDGET_NAME_REQUIRED_MESSAGE = "Budget name cannot be empty.";

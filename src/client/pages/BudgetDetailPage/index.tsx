@@ -62,23 +62,25 @@ export const BudgetDetailPage = () => {
 
   const onClickAddSection = async () => {
     const queryString = "?" + new URLSearchParams({ parent: budget_id }).toString();
-    const { body } = await call.get<NewSectionGetResponse>("/api/new-section" + queryString);
+    const { status, body, message } = await call.get<NewSectionGetResponse>(
+      "/api/new-section" + queryString,
+    );
+    if (status !== "success" || !body) {
+      window.alert(message || "Failed to create section.");
+      return;
+    }
 
-    if (!body) return;
-
-    const { section_id } = body;
+    const { section } = body;
+    const { section_id } = section;
 
     setData((oldData) => {
-      if (section_id) {
-        const newData = new Data(oldData);
-        const newSection = new Section({ section_id, budget_id });
-        indexedDb.save(newSection).catch(console.error);
-        const newSections = new SectionDictionary(newData.sections);
-        newSections.set(section_id, newSection);
-        newData.sections = newSections;
-        return newData;
-      }
-      return oldData;
+      const newData = new Data(oldData);
+      const newSection = new Section(section);
+      indexedDb.save(newSection).catch(console.error);
+      const newSections = new SectionDictionary(newData.sections);
+      newSections.set(section_id, newSection);
+      newData.sections = newSections;
+      return newData;
     });
 
     router.go(PATH.BUDGET_CONFIG, { params: new URLSearchParams({ section_id }) });
