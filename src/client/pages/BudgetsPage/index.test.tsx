@@ -1,15 +1,18 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { Budget, ContextType, Data, PATH } from "client";
-import { buildContext, buildRouter, renderWithContext, stubFetch } from "test-render";
+import { buildContext, buildRouter, renderWithContext, resetDom, stubFetch } from "test-render";
 import { BudgetsPage } from ".";
 
 let fetchStub: ReturnType<typeof stubFetch> | undefined;
 
 afterEach(() => {
+  // `cleanup()` first: unmount effects run inside it, and a request one of them
+  // fires has to land on the stub rather than escape to a real one.
+  cleanup();
   fetchStub?.restore();
   fetchStub = undefined;
-  cleanup();
+  resetDom();
 });
 
 /**

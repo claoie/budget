@@ -1,10 +1,13 @@
 import { afterEach, describe, expect, it } from "bun:test";
 import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { Budget, Calculations, Capacity, ContextType, Data, PATH } from "client";
-import { buildContext, buildRouter, renderWithContext } from "test-render";
+import { buildContext, buildRouter, renderWithContext, resetDom } from "test-render";
 import { BudgetConfigPage } from ".";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  resetDom();
+});
 
 const BUDGET_ID = "budget-under-edit";
 

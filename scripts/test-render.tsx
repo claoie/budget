@@ -20,11 +20,14 @@
  *
  * Usage:
  *
- *   import { buildContext, buildRouter, renderWithContext, stubFetch } from "test-render";
+ *   import { buildContext, buildRouter, renderWithContext, resetDom, stubFetch } from "test-render";
  *   import { cleanup } from "@testing-library/react";
  *   import { afterEach } from "bun:test";
  *
- *   afterEach(cleanup);
+ *   afterEach(() => {
+ *     cleanup();
+ *     resetDom();
+ *   });
  */
 import { ReactElement } from "react";
 import { render, RenderResult } from "@testing-library/react";
@@ -39,6 +42,18 @@ import {
   Status,
 } from "client";
 import { ViewDate } from "common";
+
+/**
+ * Clear the DOM's persistent stores. happy-dom registers one `localStorage` and
+ * one `sessionStorage` for the whole process and `cleanup()` leaves both
+ * standing, so a key that a page's mount effect writes — `setBudgetsOrder` in
+ * `client/lib/hooks/cache`, the router's `"path"` — is still there for whichever
+ * file bun runs next. Call this from the same `afterEach` as `cleanup`.
+ */
+export const resetDom = () => {
+  window.localStorage.clear();
+  window.sessionStorage.clear();
+};
 
 /** Navigation a page asked for, in call order. */
 export interface RouterCalls {
