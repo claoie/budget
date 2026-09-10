@@ -51,7 +51,7 @@ Copy `.env.example` to `.env.local` and fill in values:
 
 | Variable | Required | Description |
 |---|---|---|
-| `ADMIN_PASSWORD` | Yes | Password for the admin user |
+| `ADMIN_PASSWORD` | Yes | Password for the admin user. Unset falls back to the literal `budget`, the credential published for the public demo instance, so a private deployment must set it. |
 | `DEMO_PASSWORD` | Yes | Password for the `demo` user, which is created on every startup alongside `admin`. Unset falls back to the literal `budget`, the credential published for the public demo instance, so a private deployment must set it. |
 | `POSTGRES_HOST` | Yes | Address to your PostgreSQL server |
 | `POSTGRES_PORT` | No | PostgreSQL port (default: 5432) |
@@ -63,12 +63,12 @@ Copy `.env.example` to `.env.local` and fill in values:
 | `PLAID_SECRET_DEVELOPMENT` | For Plaid | Plaid API secret for the development environment, used when `PLAID_SECRET_PRODUCTION` is unset |
 | `PLAID_SECRET_SANDBOX` | For Plaid | Plaid API secret for the sandbox environment. The `demo` user is pinned to sandbox, so this is needed even on a deployment that only serves real accounts. |
 | `HOST_NAME` | No | Domain name for hosting (required for Plaid OAuth) |
-| `POLYGON_API_KEY` | No | Polygon.io API key (for investment metadata) |
+| `POLYGON_API_KEY` | For Polygon | Polygon.io API key (for investment metadata) |
 | `POLYGON_RATE_LIMIT_PER_MIN` | No | Cap on outbound Polygon requests per minute (default: 5, which matches the free tier). `0` disables the gate. |
 | `PORT` | No | HTTP port the server listens on (default: 3005) |
 | `LOG_LEVEL` | No | Log verbosity, one of `debug`, `info`, `warn` or `error` (default: `info`, or `error` when `NODE_ENV=test`) |
 | `DISCORD_ALARM_WEBHOOK` | No | Discord webhook URL for server error alerts |
 
-> **Plaid is all-or-nothing.** The integration turns on only when `PLAID_CLIENT_ID` and `PLAID_SECRET_SANDBOX` are both set **and** at least one of `PLAID_SECRET_PRODUCTION` or `PLAID_SECRET_DEVELOPMENT` is set. Any other combination leaves Plaid off for every user, with one `Plaid is not configured` warning at startup and no further signal.
+> **Plaid is all-or-nothing.** The integration turns on only when `PLAID_CLIENT_ID` and `PLAID_SECRET_SANDBOX` are both set **and** at least one of `PLAID_SECRET_PRODUCTION` or `PLAID_SECRET_DEVELOPMENT` is set. Any other combination leaves Plaid off for every user, with one `Plaid is not configured` warning at startup and every authenticated link-token request failing with `Plaid integration is not configured on this server.`
 
 > **Note on `NODE_ENV`:** Bun bakes `NODE_ENV` at build time into the output bundle. Setting it via `docker run -e` at runtime has no effect — configure environment-dependent behavior through other env vars.
