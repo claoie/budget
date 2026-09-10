@@ -11,14 +11,18 @@ const REPO_ROOT = path.resolve(import.meta.dir, "../../..");
  * "Is every read documented?" is about the knobs an operator supplies to the
  * running server, so it scans `src/` plus the healthcheck the runtime image
  * runs as its HEALTHCHECK command. A one-off script's own env surface, and the
- * host's build config, have no business in a deployment's env file — which is
- * why the runtime root file is named rather than the whole root scanned.
+ * host's build config, have no business in a deployment's env file.
  *
  * "Is this entry dead?" is about whether anything at all reads the name, so it
  * spans every tree that ships or runs, root files included.
+ *
+ * Both name their root files rather than scanning the repo root. A directory
+ * root's contents are not declared, so the missing-root throw below cannot see
+ * them, and the verdict would then differ between this host and the Docker
+ * builder, which copies only the root files the `Dockerfile` names.
  */
 const SERVER_ROOTS = ["src", "healthcheck.js"];
-const ALL_ROOTS = ["src", "scripts", "."];
+const ALL_ROOTS = ["src", "scripts", "vite.config.ts", "eslint.config.js", "healthcheck.js"];
 
 const SOURCE_FILE = /\.(?:[mc]?[jt]sx?)$/;
 const TEST_FILE = /\.test\.[mc]?[jt]sx?$/;
@@ -30,11 +34,11 @@ const SKIP_DIR = /^(?:node_modules|build|dist|coverage|\.git)$/;
  */
 const INDIRECTLY_READ: Record<string, string> = {};
 
-const sourceFiles = (dir: string, recurse: boolean): string[] =>
+const sourceFiles = (dir: string): string[] =>
   readdirSync(dir).flatMap((entry) => {
     const full = path.join(dir, entry);
     if (statSync(full).isDirectory()) {
-      return recurse && !SKIP_DIR.test(entry) ? sourceFiles(full, true) : [];
+      return SKIP_DIR.test(entry) ? [] : sourceFiles(full);
     }
     if (!SOURCE_FILE.test(entry) || TEST_FILE.test(entry)) return [];
     return [full];
@@ -45,7 +49,7 @@ const filesUnder = (roots: string[]): string[] =>
     const full = path.join(REPO_ROOT, root);
     if (!existsSync(full)) throw new Error(`scan root is missing: ${root}`);
     if (!statSync(full).isDirectory()) return [full];
-    return sourceFiles(full, root !== ".");
+    return sourceFiles(full);
   });
 
 const SCRIPT_KIND: Record<string, ts.ScriptKind> = {
