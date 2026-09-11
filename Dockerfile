@@ -7,6 +7,8 @@ COPY tsconfig.json tsconfig.node.json ./
 COPY vite.config.ts eslint.config.js ./
 COPY src src
 COPY scripts scripts
+COPY .env.example ./
+COPY healthcheck.js ./
 
 RUN bun install
 RUN bun run lint
