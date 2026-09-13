@@ -26,11 +26,12 @@
       "server/*": ["./server/*"],
       "common": ["./common"],
       "common/*": ["./common/*"],
-      "test-helpers": ["../scripts/test-helpers.ts"]
+      "test-helpers": ["../scripts/test-helpers.ts"],
+      "test-render": ["../scripts/test-render.tsx"]
     },
     "types": ["bun-types"]
   },
-  "include": ["src"],
+  "include": ["src", "scripts"],
   "exclude": ["**/*.test.ts", "**/*.test.tsx"],
   "references": [{ "path": "./tsconfig.node.json" }]
 }

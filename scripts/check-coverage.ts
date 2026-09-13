@@ -9,11 +9,13 @@
  *
  * Thresholds are intentionally conservative — ratchet them up as test coverage
  * improves. The goal is to prevent regressions, not to demand 100% overnight.
+ * They sit just under the measured figures, close enough that deleting a test
+ * file fails the gate instead of quietly handing the coverage back.
  */
 
 const THRESHOLDS = {
-  lines: 28,     // % — ratchet up as coverage improves (currently ~28.7%)
-  functions: 48, // % — ratchet up as coverage improves (currently ~48.9%)
+  lines: 38,     // % — ratchet up as coverage improves (measured 40.62%)
+  functions: 62, // % — ratchet up as coverage improves (measured 64.96%)
 };
 
 const LCOV_PATH = "coverage/lcov.info";
@@ -77,3 +79,7 @@ if (!failed) {
 } else {
   process.exit(1);
 }
+
+// A `bun run` entry point with no imports is a script, not a module, and its
+// top-level `await` doesn't typecheck as one.
+export {};
