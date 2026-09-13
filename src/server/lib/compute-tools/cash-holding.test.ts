@@ -6,25 +6,12 @@
 // entry. Tests that exercise the cash-security lookup pre-queue the
 // SELECT response (and INSERT response when needed) on `mockQuery`.
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 import { AccountType } from "plaid";
 
-const mockQuery = mock(async (_sql: string, _values?: unknown[]) => ({
-  rows: [] as unknown[],
-  rowCount: 0 as number | null,
-}));
+const { pg, mockQuery, resetQueryMocks } = createFakePg();
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 const { inferCashHoldings, ensureUSDCashSecurity } = await import("./cash\-holding");
 
@@ -118,7 +105,7 @@ const findInsertCall = (table: RegExp): { sql: string; values: unknown[] } | nul
 };
 
 beforeEach(() => {
-  mockQuery.mockReset();
+  resetQueryMocks();
 });
 
 describe("inferCashHoldings", () => {

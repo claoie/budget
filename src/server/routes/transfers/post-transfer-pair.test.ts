@@ -1,29 +1,16 @@
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 
-const mockQuery = mock(async (_sql: string, _values?: unknown[]) => ({
-  rows: [] as unknown[],
-  rowCount: 0 as number | null,
-}));
+const { pg, mockQuery, mockClientQuery, resetQueryMocks } = createFakePg();
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 const { postTransferPairRoute } = await import("./post\-transfer\-pair");
 
 afterAll(restoreLeaves);
 
 beforeEach(() => {
-  mockQuery.mockReset();
+  resetQueryMocks();
 });
 
 function makeReq(
@@ -70,34 +57,37 @@ describe("post-transfer-pair", () => {
     expect(result?.status).toBe("failed");
     expect(result?.message).toMatch(/not authenticated/);
     expect(mockQuery).not.toHaveBeenCalled();
+    expect(mockClientQuery).not.toHaveBeenCalled();
   });
 
   test("rejects missing body", async () => {
     const result = await postTransferPairRoute.execute(makeReq(null), fakeRes());
     expect(result?.status).toBe("failed");
     expect(mockQuery).not.toHaveBeenCalled();
+    expect(mockClientQuery).not.toHaveBeenCalled();
   });
 
   test("rejects array body (not an object)", async () => {
     const result = await postTransferPairRoute.execute(makeReq(["x"]), fakeRes());
     expect(result?.status).toBe("failed");
     expect(mockQuery).not.toHaveBeenCalled();
+    expect(mockClientQuery).not.toHaveBeenCalled();
   });
 
   // `confirmTransferPair` now runs in a DB transaction: BEGIN, advisory
   // lock, lookup SELECT, collision SELECT, UPDATE status, cleanup UPDATE,
   // COMMIT.
   function stageConfirmOk(pairTxnA = "tx-a", pairTxnB = "tx-b") {
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // BEGIN
-    mockQuery.mockResolvedValueOnce({ rows: [{}], rowCount: 1 }); // advisory lock
-    mockQuery.mockResolvedValueOnce({
+    mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // BEGIN
+    mockClientQuery.mockResolvedValueOnce({ rows: [{}], rowCount: 1 }); // advisory lock
+    mockClientQuery.mockResolvedValueOnce({
       rows: [{ transaction_id_a: pairTxnA, transaction_id_b: pairTxnB }],
       rowCount: 1,
     }); // lookup
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // collision
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 }); // UPDATE confirmed
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // cleanup
-    mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // COMMIT
+    mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // collision
+    mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 1 }); // UPDATE confirmed
+    mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // cleanup
+    mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // COMMIT
   }
 
   describe("confirm-existing-pair branch (pair_id is a string)", () => {
@@ -111,7 +101,7 @@ describe("post-transfer-pair", () => {
 
       expect(result?.status).toBe("success");
       expect(result?.body).toEqual({ pair_id: "p-confirm" });
-      const updateCall = mockQuery.mock.calls.find((c) => {
+      const updateCall = mockClientQuery.mock.calls.find((c) => {
         const sql = c[0] as string;
         return /UPDATE transaction_pairs/i.test(sql) && /'confirmed'/i.test(sql);
       })!;
@@ -128,12 +118,12 @@ describe("post-transfer-pair", () => {
         fakeRes(),
       );
       expect(result?.status).toBe("success");
-      const sessionUserScoped = mockQuery.mock.calls.filter((c) => {
+      const sessionUserScoped = mockClientQuery.mock.calls.filter((c) => {
         const values = c[1] as unknown[] | undefined;
         return values && values.includes("u-A");
       });
       expect(sessionUserScoped.length).toBeGreaterThan(0);
-      const anyCrossUser = mockQuery.mock.calls.some((c) => {
+      const anyCrossUser = mockClientQuery.mock.calls.some((c) => {
         const values = c[1] as unknown[] | undefined;
         return Boolean(values?.includes("u-B"));
       });
@@ -149,6 +139,7 @@ describe("post-transfer-pair", () => {
       );
       expect(result?.status).toBe("failed");
       expect(mockQuery).not.toHaveBeenCalled();
+      expect(mockClientQuery).not.toHaveBeenCalled();
     });
 
     test("rejects missing transaction_id_b", async () => {
@@ -158,6 +149,7 @@ describe("post-transfer-pair", () => {
       );
       expect(result?.status).toBe("failed");
       expect(mockQuery).not.toHaveBeenCalled();
+      expect(mockClientQuery).not.toHaveBeenCalled();
     });
 
     test("rejects non-string transaction_id_a", async () => {
@@ -167,24 +159,25 @@ describe("post-transfer-pair", () => {
       );
       expect(result?.status).toBe("failed");
       expect(mockQuery).not.toHaveBeenCalled();
+      expect(mockClientQuery).not.toHaveBeenCalled();
     });
 
     // `pairTransactions` runs in a DB transaction: BEGIN, advisory lock,
     // existence pre-check, collision SELECT, INSERT, cleanup UPDATE, COMMIT.
     function stagePairOk(insertPairId: string) {
-      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // BEGIN
-      mockQuery.mockResolvedValueOnce({ rows: [{}], rowCount: 1 }); // advisory lock
-      mockQuery.mockResolvedValueOnce({
+      mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // BEGIN
+      mockClientQuery.mockResolvedValueOnce({ rows: [{}], rowCount: 1 }); // advisory lock
+      mockClientQuery.mockResolvedValueOnce({
         rows: [{ transaction_id: "t-a" }, { transaction_id: "t-b" }],
         rowCount: 2,
       }); // existence pre-check (FOR SHARE), both alive
-      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // collision
-      mockQuery.mockResolvedValueOnce({
+      mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // collision
+      mockClientQuery.mockResolvedValueOnce({
         rows: [{ pair_id: insertPairId }],
         rowCount: 1,
       }); // INSERT RETURNING
-      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // cleanup
-      mockQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // COMMIT
+      mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // cleanup
+      mockClientQuery.mockResolvedValueOnce({ rows: [], rowCount: 0 }); // COMMIT
     }
 
     test("happy path with status=confirmed: INSERT scoped to session user_id", async () => {
@@ -201,7 +194,7 @@ describe("post-transfer-pair", () => {
 
       expect(result?.status).toBe("success");
       expect(result?.body).toEqual({ pair_id: "p-new" });
-      const insertCall = mockQuery.mock.calls.find((c) =>
+      const insertCall = mockClientQuery.mock.calls.find((c) =>
         /INSERT INTO transaction_pairs/i.test(c[0] as string),
       )!;
       expect(insertCall).toBeDefined();
@@ -219,7 +212,7 @@ describe("post-transfer-pair", () => {
         makeReq({ transaction_id_a: "t-a", transaction_id_b: "t-b" }),
         fakeRes(),
       );
-      const insertCall = mockQuery.mock.calls.find((c) =>
+      const insertCall = mockClientQuery.mock.calls.find((c) =>
         /INSERT INTO transaction_pairs/i.test(c[0] as string),
       )!;
       expect((insertCall[1] as unknown[])[4]).toBe("suggested");
@@ -236,7 +229,7 @@ describe("post-transfer-pair", () => {
         }),
         fakeRes(),
       );
-      const insertCall = mockQuery.mock.calls.find((c) =>
+      const insertCall = mockClientQuery.mock.calls.find((c) =>
         /INSERT INTO transaction_pairs/i.test(c[0] as string),
       )!;
       expect((insertCall[1] as unknown[])[4]).toBe("suggested");
@@ -252,7 +245,7 @@ describe("post-transfer-pair", () => {
         ),
         fakeRes(),
       );
-      const insertCall = mockQuery.mock.calls.find((c) =>
+      const insertCall = mockClientQuery.mock.calls.find((c) =>
         /INSERT INTO transaction_pairs/i.test(c[0] as string),
       )!;
       expect((insertCall[1] as unknown[])[1]).toBe("u-A");

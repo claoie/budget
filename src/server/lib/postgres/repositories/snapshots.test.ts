@@ -1,5 +1,5 @@
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves, updateColumnsOf } from "test-helpers";
+import { createFakePg, restoreLeaves, updateColumnsOf } from "test-helpers";
 import * as realSecurities from "./securities";
 
 // Snapshot real `./securities` exports before partially overriding the
@@ -8,22 +8,9 @@ import * as realSecurities from "./securities";
 // real-export spread.
 const realSecuritiesSnap = { ...realSecurities };
 
-const mockQuery = mock(async (_sql: string, _values?: unknown[]) => ({
-  rows: [] as unknown[],
-  rowCount: 0 as number | null,
-}));
+const { pg, mockQuery, resetQueryMocks } = createFakePg();
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 const mockSearchSecuritiesById = mock(async (_ids: string[]) => [] as unknown[]);
 mock.module("./securities", () => ({
@@ -89,7 +76,7 @@ function makeSecurityRow(overrides: Record<string, unknown> = {}) {
 }
 
 beforeEach(() => {
-  mockQuery.mockReset();
+  resetQueryMocks();
   mockSearchSecuritiesById.mockReset();
   mockSearchSecuritiesById.mockImplementation(async () => []);
 });

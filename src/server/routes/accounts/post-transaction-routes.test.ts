@@ -1,5 +1,5 @@
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 
 // Route-level coverage for the FE→DB label-write trio
 // (post-transaction / post-split-transaction / post-investment-transaction).
@@ -15,22 +15,12 @@ import { restoreLeaves } from "test-helpers";
 // mock inside a test does not reliably replace the `beforeEach` default, so the
 // default impl itself branches on this flag — flip it to simulate a DB error.
 let failQueries = false;
-const mockQuery = mock(async (_sql: string, _values?: unknown[]) => {
+const { pg, mockQuery, clearQueryMocks } = createFakePg(async (_sql: string, _values?: unknown[]) => {
   if (failQueries) throw new Error("db down");
   return { rows: [] as unknown[], rowCount: 0 as number | null };
 });
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 // `mock.module` is process-global in Bun and `restoreLeaves` only restores the
 // `pg` / `bcrypt` leaves, so spread the real module rather than replacing it —
@@ -54,7 +44,7 @@ afterAll(() => {
 beforeEach(() => {
   // Clear the call log but keep the flag-driven implementation (mockReset would
   // wipe it, and re-setting an impl per test doesn't reliably stick in Bun).
-  mockQuery.mockClear();
+  clearQueryMocks();
   mockSendAlarm.mockClear();
   failQueries = false;
 });
@@ -233,7 +223,7 @@ describe("post-transaction route", () => {
 
   test("a non-date date is refused before it reaches the DATE column", async () => {
     for (const value of ["hello", "", "2026-13-45"]) {
-      mockQuery.mockClear();
+      clearQueryMocks();
       mockSendAlarm.mockClear();
       await rejects(
         postTransactionRoute,
@@ -445,7 +435,7 @@ describe("post-split-transaction route", () => {
 
   test("a non-date date is refused before it reaches the DATE column", async () => {
     for (const value of ["bad", "2026-02-30"]) {
-      mockQuery.mockClear();
+      clearQueryMocks();
       mockSendAlarm.mockClear();
       await rejects(
         postSplitTransactionRoute,

@@ -7,24 +7,11 @@
 // paths write `source='manual'` and a `manual-<uuid>` id.
 
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 
-const mockQuery = mock(async (_sql: string, _values?: unknown[]) => ({
-  rows: [] as unknown[],
-  rowCount: 0 as number | null,
-}));
+const { pg, mockQuery, clearQueryMocks } = createFakePg();
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 const { getNewTransactionRoute } = await import("./get-new-transaction");
 const { getNewInvestmentTransactionRoute } = await import("./get-new-investment-transaction");
@@ -171,7 +158,7 @@ const fakeRes = () =>
   }) as unknown as Parameters<typeof getNewTransactionRoute.execute>[1];
 
 beforeEach(() => {
-  mockQuery.mockClear();
+  clearQueryMocks();
   mockQuery.mockImplementation(queryRouter);
   accountRow = null;
   itemRow = null;

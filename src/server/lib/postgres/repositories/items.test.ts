@@ -1,23 +1,10 @@
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 import { AccountType, AccountSubtype } from "plaid";
 
-const mockQuery = mock(async (_sql: string, _values?: unknown[]) => ({
-  rows: [] as unknown[],
-  rowCount: 0 as number | null,
-}));
+const { pg, mockQuery, mockClientQuery, resetQueryMocks } = createFakePg();
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 const { deleteItem } = await import("./items");
 
@@ -54,7 +41,7 @@ const testUser = { user_id: "usr-1", username: "hoie" };
 
 describe("deleteItem", () => {
   beforeEach(() => {
-    mockQuery.mockReset();
+    resetQueryMocks();
   });
 
   test("soft-deletes snapshots by BOTH account_id and holding_account_id", async () => {
@@ -77,7 +64,7 @@ describe("deleteItem", () => {
     // under `holding_account_id` (their `account_id` is NULL). Both passes must
     // fire or the item-delete path orphans the holding-snapshot history — the
     // bug PR 475 fixed for deleteAccounts but never propagated here.
-    const snapshotDeletes = mockQuery.mock.calls
+    const snapshotDeletes = mockClientQuery.mock.calls
       .map(([sql]) => sql)
       .filter(
         (sql): sql is string =>
@@ -101,7 +88,7 @@ describe("deleteItem", () => {
 
     await deleteItem(testUser, "item-del");
 
-    const pairDeletes = mockQuery.mock.calls.filter(
+    const pairDeletes = mockClientQuery.mock.calls.filter(
       ([sql]) =>
         typeof sql === "string" &&
         /UPDATE\s+transaction_pairs\b/i.test(sql) &&
@@ -121,6 +108,14 @@ describe("deleteItem", () => {
     const pairB = byColumn("transaction_id_b");
     expect(pairA).toBeDefined();
     expect(pairB).toBeDefined();
+
+    // On the pool the cascade commits on its own: a later failure in this
+    // block rolls the accounts back and leaves their pairs soft-deleted.
+    expect(
+      mockQuery.mock.calls.some(
+        ([sql]) => typeof sql === "string" && /UPDATE\s+transaction_pairs\b/i.test(sql),
+      ),
+    ).toBe(false);
 
     for (const call of [pairA, pairB]) {
       const [sql, values] = call as [string, unknown[]];
@@ -151,7 +146,7 @@ describe("deleteItem", () => {
 
     await deleteItem(testUser, "item-del");
 
-    const sqls = mockQuery.mock.calls
+    const sqls = mockClientQuery.mock.calls
       .map(([sql]) => sql)
       .filter((sql): sql is string => typeof sql === "string");
     const transactionsDelete = sqls.findIndex(
@@ -168,12 +163,44 @@ describe("deleteItem", () => {
     expect(transactionsDelete).toBeLessThan(firstPairDelete);
   });
 
+  test("issues every write on the transaction client, never on the pool", async () => {
+    mockQuery.mockImplementation(async (sql: string) => {
+      if (/SELECT/i.test(sql) && /\baccounts\b/i.test(sql)) {
+        return {
+          rows: [makeAccountRow({ account_id: "acc-del", item_id: "item-del" })],
+          rowCount: 1,
+        };
+      }
+      return { rows: [], rowCount: 0 };
+    });
+
+    await deleteItem(testUser, "item-del");
+
+    // The account lookup is the only statement outside `withTransaction`.
+    const poolWrites = mockQuery.mock.calls
+      .map(([sql]) => sql)
+      .filter((sql): sql is string => typeof sql === "string")
+      .filter((sql) => /^\s*(UPDATE|INSERT|DELETE)\b/i.test(sql));
+    expect(poolWrites).toEqual([]);
+
+    const clientUpdates = mockClientQuery.mock.calls
+      .map(([sql]) => sql)
+      .filter((sql): sql is string => typeof sql === "string")
+      .map((sql) => sql.match(/^\s*UPDATE\s+(\w+)/i)?.[1])
+      .filter((table): table is string => !!table);
+    expect(clientUpdates).toContain("transaction_pairs");
+    expect(clientUpdates).toContain("transactions");
+    expect(clientUpdates).toContain("snapshots");
+    expect(clientUpdates).toContain("accounts");
+    expect(clientUpdates).toContain("items");
+  });
+
   test("skips the transaction_pairs cascade when the item owns no accounts", async () => {
     mockQuery.mockImplementation(async () => ({ rows: [], rowCount: 0 }));
 
     await deleteItem(testUser, "item-empty");
 
-    const pairDeletes = mockQuery.mock.calls.filter(
+    const pairDeletes = mockClientQuery.mock.calls.filter(
       ([sql]) => typeof sql === "string" && /UPDATE\s+transaction_pairs\b/i.test(sql),
     );
     expect(pairDeletes).toHaveLength(0);

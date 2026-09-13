@@ -4,25 +4,12 @@
 // the real package — same as the original test. Password hash + compare
 // run unmocked.
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 import bcrypt from "bcrypt";
 
-const mockQuery = mock(async (_sql: string, _values?: unknown[]) => ({
-  rows: [] as unknown[],
-  rowCount: 0 as number | null,
-}));
+const { pg, mockQuery, resetQueryMocks } = createFakePg();
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 const { postLoginRoute } = await import("./post-login");
 const { loginRateLimiter } = await import("server/lib/rate-limit");
@@ -46,7 +33,7 @@ const userRow = (overrides: Record<string, unknown> = {}) => ({
 });
 
 beforeEach(() => {
-  mockQuery.mockReset();
+  resetQueryMocks();
 });
 
 interface SessionStub {

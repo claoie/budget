@@ -1,5 +1,5 @@
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 
 type Row = Record<string, unknown>;
 
@@ -8,7 +8,7 @@ const db = {
   updateError: null as Error | null,
 };
 
-const mockQuery = mock(async (sql: string, _values?: unknown[]) => {
+const { pg, mockQuery, clearQueryMocks } = createFakePg(async (sql: string, _values?: unknown[]) => {
   const rows = (() => {
     if (/^\s*UPDATE\s+charts\b/i.test(sql)) {
       if (db.updateError) throw db.updateError;
@@ -19,17 +19,7 @@ const mockQuery = mock(async (sql: string, _values?: unknown[]) => {
   return { rows: rows as unknown[], rowCount: rows.length as number | null };
 });
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 // `mock.module` is process-global in Bun and `restoreLeaves` only restores the
 // `pg` / `bcrypt` leaves, so spread the real module rather than replacing it —
@@ -49,7 +39,7 @@ afterAll(() => {
 });
 
 beforeEach(() => {
-  mockQuery.mockClear();
+  clearQueryMocks();
   mockSendAlarm.mockClear();
   db.updateReturns = [];
   db.updateError = null;
@@ -116,7 +106,7 @@ describe("post-chart typed body fields", () => {
 
   test("a non-string configuration is refused — the client always sends a JSON string", async () => {
     for (const configuration of [{ account_ids: [] }, 5, null]) {
-      mockQuery.mockClear();
+      clearQueryMocks();
       mockSendAlarm.mockClear();
       await rejects({ chart_id: UUID, configuration }, "Field configuration must be a string");
     }

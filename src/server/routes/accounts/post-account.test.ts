@@ -1,5 +1,5 @@
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 
 // `POST /api/account` is purely UPDATE — create lives on the sibling
 // `GET /api/new-account` mint route. A FakePool intercepts pg so the
@@ -16,7 +16,7 @@ const db = {
   updateError: null as Error | null,
 };
 
-const mockQuery = mock(async (sql: string, _values?: unknown[]) => {
+const { pg, mockQuery, clearQueryMocks } = createFakePg(async (sql: string, _values?: unknown[]) => {
   const rows = (() => {
     if (/^\s*UPDATE\s+accounts\b/i.test(sql)) {
       if (db.updateError) throw db.updateError;
@@ -27,17 +27,7 @@ const mockQuery = mock(async (sql: string, _values?: unknown[]) => {
   return { rows: rows as unknown[], rowCount: rows.length as number | null };
 });
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 // `mock.module` is process-global in Bun and `restoreLeaves` only restores the
 // `pg` / `bcrypt` leaves, so spread the real module rather than replacing it —
@@ -57,7 +47,7 @@ afterAll(() => {
 });
 
 beforeEach(() => {
-  mockQuery.mockClear();
+  clearQueryMocks();
   mockSendAlarm.mockClear();
   db.updateReturns = [];
   db.updateError = null;

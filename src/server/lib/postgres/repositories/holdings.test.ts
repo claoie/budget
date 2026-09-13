@@ -1,22 +1,9 @@
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves, updateColumnsOf } from "test-helpers";
+import { createFakePg, restoreLeaves, updateColumnsOf } from "test-helpers";
 
-const mockQuery = mock(async (_sql: string, _values?: unknown[]) => ({
-  rows: [] as unknown[],
-  rowCount: 0 as number | null,
-}));
+const { pg, mockQuery, clearQueryMocks } = createFakePg();
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 const { deleteHoldings, searchHoldingsByAccountId, upsertHoldings } = await import("./holdings");
 
@@ -28,7 +15,7 @@ const mockUser = { user_id: "usr-1", username: "tester" } as {
 };
 
 beforeEach(() => {
-  mockQuery.mockClear();
+  clearQueryMocks();
   mockQuery.mockImplementation(async () => ({ rows: [], rowCount: 1 }));
 });
 

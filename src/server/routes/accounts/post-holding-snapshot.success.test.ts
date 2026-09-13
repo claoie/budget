@@ -10,14 +10,14 @@
 // only the two SELECTs are scripted (snapshots → holding rows, securities →
 // security rows); everything else falls through to an empty/ok result.
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 import { getSquashedDateString, LocalDate } from "common";
 
 let snapshotRows: Record<string, unknown>[] = [];
 let securityRows: Record<string, unknown>[] = [];
 let accountRows: Record<string, unknown>[] = [];
 
-const mockQuery = mock(async (sql: string, _values?: unknown[]) => {
+const { pg, mockQuery, clearQueryMocks } = createFakePg(async (sql: string, _values?: unknown[]) => {
   if (/select[\s\S]*from\s+snapshots/i.test(sql)) {
     return { rows: snapshotRows, rowCount: snapshotRows.length };
   }
@@ -31,24 +31,14 @@ const mockQuery = mock(async (sql: string, _values?: unknown[]) => {
   return { rows: [{ ok: true }], rowCount: 1 };
 });
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 const { postHoldingSnapshotRoute } = await import("./post\-holding\-snapshot");
 
 afterAll(restoreLeaves);
 
 beforeEach(() => {
-  mockQuery.mockClear();
+  clearQueryMocks();
   snapshotRows = [];
   securityRows = [];
   accountRows = [];
@@ -235,7 +225,7 @@ describe("post-holding-snapshot update mode", () => {
   // global alarm pages.
   test("rejects an unparseable snapshot_date instead of throwing past the try", async () => {
     for (const snapshot_date of ["garbage", "2026-13-45x"]) {
-      mockQuery.mockClear();
+      clearQueryMocks();
       snapshotRows = [holdingSnapshotRow()];
 
       const result = await postHoldingSnapshotRoute.execute(
@@ -251,7 +241,7 @@ describe("post-holding-snapshot update mode", () => {
 
   test("rejects a non-string snapshot_date instead of dropping it from the patch", async () => {
     for (const snapshot_date of [20260701, { $ne: null }, ["2024-03-15"]]) {
-      mockQuery.mockClear();
+      clearQueryMocks();
       snapshotRows = [holdingSnapshotRow()];
 
       const result = await postHoldingSnapshotRoute.execute(
@@ -397,7 +387,7 @@ describe("post-holding-snapshot create mode", () => {
 
   test("rejects an unparseable snapshot_date instead of minting a NaN id", async () => {
     for (const snapshot_date of ["garbage", "2026-13-45x"]) {
-      mockQuery.mockClear();
+      clearQueryMocks();
       securityRows = [existingSecurityRow()];
       accountRows = [accountRow()];
 
@@ -417,7 +407,7 @@ describe("post-holding-snapshot create mode", () => {
   // a real 1970 snapshot into the user's graph rather than failing.
   test("rejects a non-string snapshot_date instead of reading it as epoch ms", async () => {
     for (const snapshot_date of [20260701, { $ne: null }, ["2024-03-15"]]) {
-      mockQuery.mockClear();
+      clearQueryMocks();
       securityRows = [existingSecurityRow()];
       accountRows = [accountRow()];
 

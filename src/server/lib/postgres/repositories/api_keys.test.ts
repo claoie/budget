@@ -5,24 +5,11 @@
 // bundled tests in the same `bun test` process can mock `pg`
 // differently without colliding.
 import { describe, test, expect, mock, beforeEach, afterAll } from "bun:test";
-import { restoreLeaves } from "test-helpers";
+import { createFakePg, restoreLeaves } from "test-helpers";
 
-const mockQuery = mock(async (_sql: string, _values?: unknown[]) => ({
-  rows: [] as unknown[],
-  rowCount: 0 as number | null,
-}));
+const { pg, mockQuery, resetQueryMocks } = createFakePg();
 
-class FakePool {
-  query = mockQuery;
-  end = async () => {};
-  connect = async () => ({ query: mockQuery, release: () => {} });
-}
-
-mock.module("pg", () => ({
-  Pool: FakePool,
-  types: { setTypeParser: () => {} },
-  default: { Pool: FakePool, types: { setTypeParser: () => {} } },
-}));
+mock.module("pg", () => pg);
 
 // Dynamic-import so the leaf-dep mocks above are registered BEFORE the
 // bundle (which the preload redirects this path to) loads. The path is
@@ -33,7 +20,7 @@ const { generateApiKey, hashApiKey, createApiKey, listApiKeys, revokeApiKey, ver
 afterAll(restoreLeaves);
 
 beforeEach(() => {
-  mockQuery.mockReset();
+  resetQueryMocks();
 });
 
 describe("generateApiKey", () => {
