@@ -49,3 +49,5 @@ export const SNAPSHOTS = TableName.Snapshots;
 export const CHARTS = TableName.Charts;
 export const API_KEYS = TableName.ApiKeys;
 export const REJECTED_CATEGORIES = TableName.RejectedCategories;
+
+export const BUDGET_NAME_REQUIRED_MESSAGE = "Budget name cannot be empty.";

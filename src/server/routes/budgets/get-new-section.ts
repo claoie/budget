@@ -1,6 +1,7 @@
+import { JSONSection } from "common";
 import { Route, createSection, requireQueryString, validationError } from "server";
 
-export type NewSectionGetResponse = { section_id: string };
+export type NewSectionGetResponse = { section: JSONSection };
 
 export const getNewSectionRoute = new Route<NewSectionGetResponse>(
   "GET",
@@ -22,6 +23,6 @@ export const getNewSectionRoute = new Route<NewSectionGetResponse>(
     if (!response) {
       return { status: "failed", message: "Failed to create section." };
     }
-    return { status: "success", body: { section_id: response.section_id } };
+    return { status: "success", body: { section: response } };
   }
 );
